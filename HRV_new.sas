@@ -1367,7 +1367,7 @@ proc glm data=hrv_long;
 
     class Group REST_VS_STRESS Gender;
 
-    model lnRSA =
+    model PEP_msec =
         /* Main effects */
         Group
         REST_VS_STRESS
@@ -1380,8 +1380,8 @@ proc glm data=hrv_long;
 
         / solution;
 
-    output out=rsa_olsresid
-           r = r_lnRSA;
+    output out=pep_olsresid
+           r = r_pep;
 run;
 quit;
 
@@ -1392,42 +1392,42 @@ quit;
 */
 
 
-proc sgplot data=rsa_olsresid;
+proc sgplot data=pep_olsresid;
 	by _imputation_;
-    scatter x=Time y=r_lnRSA / transparency=0.4;
-    loess x=Time y=r_lnRSA;
-    title "OLS Residuals vs Time for lnRSA";
+    scatter x=Time y=r_pep / transparency=0.4;
+    loess x=Time y=r_pep;
+    title "OLS Residuals vs Time for PEP";
 run;
 
-proc sgplot data=rsa_olsresid;
+proc sgplot data=pep_olsresid;
 	by _imputation_;
-    vbox r_lnRSA / category=REST_VS_STRESS;
-    title "lnRSA Residual Distribution by Condition (Rest vs Stress)";
+    vbox r_pep / category=REST_VS_STRESS;
+    title "PEP Residual Distribution by Condition (Rest vs Stress)";
 run;
 
-proc sgplot data=rsa_olsresid;
+proc sgplot data=pep_olsresid;
     by _imputation_;
-    vbox r_lnRSA / category=Group;
-    title "lnRSA Residual Distribution by PMA Group";
+    vbox r_pep / category=Group;
+    title "PEP Residual Distribution by PMA Group";
 run;
 
-proc sgplot data=rsa_olsresid;
+proc sgplot data=pep_olsresid;
 	by _imputation_;
-    series x=Time y=r_lnRSA / group=Subject_ID transparency=0.8;
-    title "lnRSA Residual Profiles by Subject";
+    series x=Time y=r_pep / group=Subject_ID transparency=0.8;
+    title "PEP Residual Profiles by Subject";
 run;
 
 data resvar;
-    set rsa_olsresid;
+    set pep_olsresid;
 	by _imputation_;
-    r2 = r_lnRSA * r_lnRSA;
+    r2 = r_pep * r_pep;
 run;
 
 proc sgplot data=resvar;
 
     scatter x=Time y=r2 / transparency=0.5;
     loess x=Time y=r2;
-    title "lnRSA Squared Residuals vs Time (Variance Diagnostics)";
+    title "PEP Squared Residuals vs Time (Variance Diagnostics)";
 run;
 
 /*11.5 Check Residuals Covariance*/
@@ -1447,20 +1447,20 @@ run;
 
 /*After seeing the plots, the candidates for the covariance structure are: AR, CS, UN, let's try*/
 /*1) UN*/
-proc mixed data=rsa_olsresid;
+proc mixed data=pep_olsresid;
     by _Imputation_;
     class Subject_ID Time;
-    model r_lnRSA = ;
+    model r_pep = ;
     random intercept / subject=Subject_ID;
     repeated Time / subject=Subject_ID type=UN;
     ods output FitStatistics=UN_AIC;
 run;
 
 /*2) AR(1)*/
-proc mixed data=rsa_olsresid;
+proc mixed data=pep_olsresid;
     by _Imputation_;
     class Subject_ID Time;
-    model r_lnRSA = ;
+    model r_pep = ;
     random intercept / subject=Subject_ID;
     repeated Time / subject=Subject_ID type=AR(1);
     ods output FitStatistics=AR1_AIC;
@@ -1491,7 +1491,7 @@ proc mixed data=hrv_long method=ml;
     where _Imputation_ = 10;
     class Subject_ID Group REST_VS_STRESS Gender Time;
 
-    model lnRSA =
+    model PEP_msec =
         Group
         REST_VS_STRESS
         Gender
@@ -1514,7 +1514,7 @@ proc mixed data=hrv_long method=ml;
     where _Imputation_ = 10;
     class Subject_ID Group REST_VS_STRESS Gender Time;
 
-    model lnRSA =
+    model PEP_msec =
         Group
         REST_VS_STRESS
         Gender
@@ -1535,7 +1535,7 @@ proc mixed data=hrv_long method=ml;
     where _Imputation_ = 10;
     class Subject_ID Group REST_VS_STRESS Gender Time;
 
-    model lnRSA =
+    model PEP_msec =
         Group
         REST_VS_STRESS
         Gender
@@ -1570,7 +1570,7 @@ proc mixed data=hrv_long nobound method=reml;
     by _Imputation_;
     class Subject_ID Group REST_VS_STRESS Gender Time;
 
-    model lnRSA =
+    model PEP_msec =
         Group
         REST_VS_STRESS
         Group*REST_VS_STRESS
@@ -1579,21 +1579,21 @@ proc mixed data=hrv_long nobound method=reml;
     random intercept / subject=Subject_ID;
     repeated Time / subject=Subject_ID type=AR(1);
 
-    ods output SolutionF = lnRSA_SolutionF;
+    ods output SolutionF = PEP_SolutionF;
 run;
 
 /* Keep only the estimable rows (no reference levels) */
-data RSA_Parms;
-    set lnRSA_SolutionF;
+data PEP_Parms;
+    set PEP_SolutionF;
     where StdErr ne .;  * drop rows like Group=1 with StdErr=. ;
 run;
 
-proc print data=RSA_Parms(obs=20);
+proc print data=PEP_Parms(obs=20);
 run;
 
 
-data RSA_Parms2;
-    set RSA_Parms;
+data PEP_Parms2;
+    set PEP_Parms;
     length Parameter $40;
 
     /* create a single label for each parameter */
@@ -1606,18 +1606,18 @@ data RSA_Parms2;
     keep _Imputation_ Parameter Estimate StdErr;
 run;
 
-proc sort data=RSA_Parms2;
+proc sort data=PEP_Parms2;
     by Parameter _Imputation_;
 run;
 
-proc print data=RSA_Parms2(obs=20);
+proc print data=PEP_Parms2(obs=20);
 run;
 
-proc sort data=RSA_Parms2;
+proc sort data=PEP_Parms2;
     by Parameter _Imputation_;
 run;
 
-proc mianalyze data=RSA_Parms2;
+proc mianalyze data=PEP_Parms2;
     by Parameter;          * one pooled result per parameter label;
     modeleffects Estimate; * variable that holds the coefficient;
     stderr StdErr;         * variable that holds the SE;
