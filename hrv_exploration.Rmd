@@ -1,0 +1,1305 @@
+---
+title: "HRV Data Exploration"
+author: "Abdelrahman"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+knitr::opts_chunk$set(echo = TRUE, dev = "pdf")
+```
+  
+```{r include=FALSE}
+library(readxl)
+library(dplyr)
+library(tidyr)
+library(purrr)
+library(ggplot2)
+library(readr) 
+```
+
+```{r include=FALSE}
+hrv=readxl::read_xlsx('C:/Users/Ahmed/OneDrive/Documents/Masters/Second_Year/Master Thesis Data Science/Prenatal stress study/data/HRV/hrv_fcs_imputed_Long.xlsx')
+```
+    
+```{r include=FALSE}
+setwd('C:/Users/Ahmed/OneDrive/Documents/Masters/Second_Year/Master Thesis Data Science/Prenatal stress study/data/HRV/Exploration/Mean/R')
+```
+
+```{r}
+hrv %>% filtergroup_by(Time) %>% summarise(mean(lnRMSSD)) 
+```
+
+
+
+```{r}
+hrv %>% group_by(`_Imputation_`)%>%distinct(Subject_ID, Group)%>%count(Group)
+```
+
+
+```{r}
+hrv %>% group_by(`_Imputation_`)%>%count(REST_VS_STRESS)
+```
+
+```{r}
+hrv %>% group_by(`_Imputation_`)%>%count(PHASE)
+```
+
+```{r}
+# Ensure factors are labeled (prevents linetype/color errors)
+hrv <- hrv %>%
+  mutate(
+    Group = factor(Group, levels = c(0,1), labels = c("Low/Medium","High")),
+    REST_VS_STRESS = factor(REST_VS_STRESS, levels = c(0,1), labels = c("Rest","Stress"))
+  )
+
+# Variables to explore (edit if you wish)
+vars <- c("lnRMSSD","lnSDNN","lnHF","lnLF","lnLFHF","lnRSA","lnSCL","PEP_msec")
+
+```
+
+   
+
+```{r}
+# choose ONE of these strategies by setting METHOD below
+METHOD <- "quantile"   # "quantile" (90% central), "meanpad" (pad around loess mean range)
+
+# central-quantile limits per variable (robust; good default)
+ylims_quantile <- function(df, v, q = c(.25, .75), min_span = 0.05, pad = 0.02){
+  xv <- df[[v]]
+  lo <- as.numeric(quantile(xv, q[1], na.rm = TRUE))
+  hi <- as.numeric(quantile(xv, q[2], na.rm = TRUE))
+  # enforce a minimum vertical span and a small padding
+  span <- max(hi - lo, min_span)
+  mid  <- (hi + lo)/2
+  c(mid - span/2 - pad*span, mid + span/2 + pad*span)
+}
+
+# limits using ONLY the smoothed mean range (zoom on mean shape)
+ylims_meanpad <- function(df, v, span = 0.75, degree = 2, pad = 0.05, min_span = 0.02){
+  fit   <- loess(df[[v]] ~ df$Time, span = span, degree = degree, family = "gaussian")
+  grid  <- data.frame(Time = seq(min(df$Time), max(df$Time), length.out = 200))
+  pred  <- predict(fit, newdata = grid)
+  rng   <- range(pred, na.rm = TRUE)
+  span0 <- max(rng[2] - rng[1], min_span)
+  pad0  <- pad * span0
+  c(rng[1] - pad0, rng[2] + pad0)
+}
+
+pick_ylims <- function(df, v){
+  if (METHOD == "meanpad") ylims_meanpad(df, v) else ylims_quantile(df, v)
+}
+
+```  
+
+
+
+
+
+After you confirm that all imputations show similar shapes (no outliers, no drift), you can stop looping through them for the rest of EDA.  
+From then on, you work with the pooled summary for each variable
+
+
+
+
+  
+## (a) Overall mean vs Time  
+  
+Per-imputation  
+  
+```{r}
+var <- "lnSCL"
+
+
+for (v in vars) {
+  for (m in sort(unique(hrv$`_Imputation_`))) {
+    df_m <- hrv %>% filter(`_Imputation_` == m)
+
+    yL <- pick_ylims(df_m, v)
+
+    g <- ggplot(df_m, aes(Time, .data[[v]])) +
+      geom_point(alpha = 0.35, size = 1) +
+      geom_smooth(method = "loess", span = 0.75, color = "black", linewidth = 1.1, se = FALSE) +
+      coord_cartesian(ylim = yL) +                # <— auto limits here
+      theme_bw(base_size = 13) + theme(panel.grid = element_blank()) +
+      #scale_x_continuous(breaks = c(1, 2), limits = c(1, 2)) +
+      labs(title = paste0("Per-imputation LOESS – ", v, "  (Imp=", m, ")"),
+           subtitle = paste("y-lims:", paste(round(yL, 3), collapse = " to "),
+                            "| method:", METHOD),
+           x = "Time (session)", y = v)
+
+    ggsave(paste0("EDA_", v, "_Overall_Imp", m, ".png"), g, width = 7.5, height = 5.5, dpi = 300)
+  }
+}
+
+```
+
+  
+Pooled across imputations    
+
+Within each imputed set, the variation reflects both true between-subject differences and random imputation noise.  
+
+Averaging the imputed-set means stabilizes the random imputation noise but preserves the underlying population trend.  
+
+
+    
+```{r}
+#pooled_overall <- hrv %>%
+ # pivot_longer(all_of(vars), names_to = "Variable", values_to = "Value") %>%
+  #group_by(Variable, Time) %>%
+  #summarise(Mean = mean(Value, na.rm = TRUE), .groups = "drop")
+
+vars <- c("lnRMSSD","lnSDNN","lnHF","lnLF","lnLFHF","lnRSA","lnSCL","PEP_msec")
+
+pooled_overall <- hrv %>%
+  pivot_longer(all_of(vars), names_to = "Variable", values_to = "Value") %>%
+  group_by(Variable, Time, `_Imputation_`) %>%
+  summarise(Mean_m = mean(Value, na.rm = TRUE), .groups = "drop") %>%
+  group_by(Variable, Time) %>%
+  summarise(Mean = mean(Mean_m, na.rm = TRUE), .groups = "drop")
+
+
+
+for (v in vars) {
+  df_v <- pooled_overall %>% filter(Variable == v)
+  g <- ggplot(df_v, aes(Time, Mean)) +
+    geom_point(size = 1.6) +
+    #geom_line(group = 1, linewidth = 1.1) +
+    geom_smooth(method = "loess", span = 0.75, color = "black", linewidth = 1.2, se = FALSE) +
+    theme_bw(base_size = 13) + theme(panel.grid = element_blank()) +
+    #scale_x_continuous(breaks = c(1, 2), limits = c(1, 2)) +
+    labs(title = paste("Pooled LOESS –", v), x = "Time (session)", y = paste("Mean", v))
+
+  ggsave(paste0("EDA_", v, "_Overall_Pooled.png"), g, width = 7.5, height = 5.5, dpi = 300)
+}
+
+```
+
+  
+## (b) Mean vs Time × Group  
+  
+Per Imputation  
+  
+```{r}
+var <- 'lnSCL'
+
+for (v in vars) {
+  for (m in sort(unique(hrv$`_Imputation_`))) {
+    df_m <- hrv %>% filter(`_Imputation_` == m)
+
+    g <- ggplot(df_m, aes(Time, .data[[v]])) +
+      geom_point(alpha = 0.35, size = 1) +
+      geom_smooth(method = "loess", span = 0.75, color = "black", linewidth = 1.1, se = TRUE) +
+      facet_grid(. ~ Group) +
+      theme_bw(base_size = 13) + theme(panel.grid = element_blank(),
+                                       strip.text = element_text(face="bold")) +
+      labs(title = paste0("Per-imputation LOESS – ", v, " by Group (Imp=", m, ")"),
+           x = "Time (session)", y = v)
+
+    ggsave(paste0("EDA_", v, "_ByGroup_Imp", m, ".png"), g, width = 8, height = 5.5, dpi = 300)
+  }
+}
+
+```
+
+  
+Pooled across imputations  
+  
+```{r}
+pooled_by_group <- hrv %>%
+  pivot_longer(all_of(vars), names_to = "Variable", values_to = "Value") %>%
+  
+  # 1. Compute means separately within each imputation
+  group_by(Variable, Time, Group, `_Imputation_`) %>%
+  summarise(Mean_m = mean(Value, na.rm = TRUE), .groups = "drop") %>%
+  
+  # 2. Average means across imputations (equal weight)
+  group_by(Variable, Time, Group) %>%
+  summarise(Mean = mean(Mean_m), .groups = "drop")
+
+
+for (v in vars) {
+  df_v <- pooled_by_group %>% filter(Variable == v)
+  
+  g <- ggplot(df_v, aes(Time, Mean)) +
+    geom_point(size = 1.6) +
+    geom_smooth(method = "loess", span = 0.75, color = "black", linewidth = 1.2, se = FALSE) +
+    facet_grid(. ~ Group) +
+    theme_bw(base_size = 13) +
+    theme(panel.grid = element_blank(),
+          strip.text = element_text(face = "bold")) +
+    labs(title = paste("Pooled LOESS –", v, "by Group"),
+         x = "Time (session)", 
+         y = paste("Mean", v))
+  
+  ggsave(paste0("EDA_", v, "_ByGroup_Pooled.png"),
+         g, width = 8, height = 5.5, dpi = 300)
+}
+
+
+```
+
+
+  
+## (c) Mean vs Time × Condition (REST_VS_STRESS)  
+  
+Per Imputation  
+  
+```{r}
+vars <- c("lnRMSSD","lnSDNN","lnHF","lnLF","lnLFHF","lnRSA","PEP_msec")
+var <- 'lnSCL'
+
+for (v in var) {
+  for (m in sort(unique(hrv$`_Imputation_`))) {
+    df_m <- hrv %>% filter(`_Imputation_` == m)
+
+    g <- ggplot(df_m, aes(Time, .data[[v]])) +
+      geom_point(alpha = 0.35, size = 1) +
+      geom_smooth(method = "loess", span = 0.75, color = "black", linewidth = 1.1, se = TRUE) +
+      facet_grid(REST_VS_STRESS ~ .) +
+      theme_bw(base_size = 13) + theme(panel.grid = element_blank(),
+                                       strip.text = element_text(face="bold")) +
+      #scale_x_continuous(breaks = c(1, 2), limits = c(1, 2)) +
+      labs(title = paste0("Per-imputation LOESS – ", v, " by Condition (Imp=", m, ")"),
+           x = "Time (session)", y = v)
+
+    ggsave(paste0("EDA_", v, "_ByCond_Imp", m, ".png"), g, width = 6.8, height = 6.8, dpi = 300)
+  }
+}
+
+```
+
+  
+Pooled across imputations  
+  
+```{r}
+pooled_by_cond <- hrv %>%
+  pivot_longer(all_of(vars), names_to = "Variable", values_to = "Value") %>%
+  group_by(Variable, Time, REST_VS_STRESS, `_Imputation_`) %>%
+  summarise(Mean_m = mean(Value, na.rm = TRUE), .groups = "drop") %>%
+  group_by(Variable, Time, REST_VS_STRESS) %>%
+  summarise(Mean = mean(Mean_m), .groups = "drop")
+
+
+vr = c("lnHF","lnLF","lnLFHF")
+#vr = c("lnRMSSD","lnSDNN","lnRSA","PEP_msec")
+
+for (v in vr) {
+  df_v <- pooled_by_cond %>% filter(Variable == v)
+  g <- ggplot(df_v, aes(Time, Mean)) +
+    #geom_line(linewidth = 0.9, color = "black") +     # << add line
+    geom_point(size = 2) +
+    geom_smooth(method = "loess", span = 0.75, color = "black", linewidth = 1.2, se = FALSE) +
+    facet_grid(REST_VS_STRESS ~ .) +
+    theme_bw(base_size = 13) + theme(panel.grid = element_blank(),
+                                     strip.text = element_text(face="bold")) +
+    labs(title = paste("Pooled LOESS –", v, "by Condition"),
+         x = "Time (session)", y = paste("Mean", v))
+
+    ggsave(paste0("EDA_", v, "_ByCond_Pooled.png"), g, width = 6.8, height = 6.8, dpi = 300)
+}
+```
+
+```{r}
+for (v in vr) {   # vars_full = c("lnRMSSD","lnSDNN","lnRSA","PEP_msec")
+  
+  df_v <- pooled_by_cond %>% filter(Variable == v)
+
+  # Extract only the rest rows for line connection
+  df_rest <- df_v %>% filter(REST_VS_STRESS == "Rest")
+
+  g <- ggplot(df_v, aes(Time, Mean)) +
+    
+    # 1. Straight line only for Rest (2 points: T1 and T6)
+    geom_line(data = df_rest, aes(Time, Mean), linewidth = 1, color = "black") +
+    
+    # 2. Points for all
+    geom_point(size = 2) +
+    
+    # 3. LOESS for both conditions
+    geom_smooth(
+      method = "loess", 
+      span = 0.75,
+      color = "black",
+      linewidth = 1.2,
+      se = FALSE
+    ) +
+    
+    facet_grid(REST_VS_STRESS ~ .) +
+    
+    theme_bw(base_size = 13) +
+    theme(
+      panel.grid = element_blank(),
+      strip.text = element_text(face = "bold")
+    ) +
+    
+    labs(
+      title = paste("Pooled LOESS –", v, "by Condition"),
+      x = "Time (session)",
+      y = paste("Mean", v)
+    )
+
+  ggsave(
+    paste0("EDA_", v, "_ByCond_Pooled.png"),
+    g, width = 6.8, height = 6.8, dpi = 300
+  )
+}
+
+
+```
+
+  
+  
+  
+  
+  
+## (d) Mean vs Time × Group × Condition (your 2×2 panels)  
+
+  
+Per Imputation  
+```{r}
+for (v in vars) {
+  for (m in sort(unique(hrv$`_Imputation_`))) {
+    df_m <- hrv %>% filter(`_Imputation_` == m)
+
+    g <- ggplot(df_m, aes(Time, .data[[v]])) +
+      geom_point(alpha = 0.35, size = 1) +
+      geom_smooth(method = "loess", span = 0.75, color = "black", linewidth = 1.1, se = TRUE) +
+      facet_grid(REST_VS_STRESS ~ Group) +
+      theme_bw(base_size = 13) +
+      theme(panel.grid = element_blank(), strip.text = element_text(face="bold")) +
+      labs(title = paste0("Per-imputation LOESS – ", v, " by Group × Condition (Imp=", m, ")"),
+           x = "Time (session)", y = v)
+
+    ggsave(paste0("EDA_", v, "_ByGroupCond_Imp", m, ".png"),
+           g, width = 8, height = 6, dpi = 300)
+  }
+}
+
+```
+  
+
+Pooled across imputations  
+  
+```{r}
+pooled_by_group_cond <- hrv %>%
+  pivot_longer(all_of(vars), names_to = "Variable", values_to = "Value") %>%
+  group_by(Variable, Time, Group, REST_VS_STRESS) %>%
+  summarise(Mean = mean(Value, na.rm = TRUE), .groups = "drop")
+
+vrr = 'lnSCL'
+
+for (v in vrr) {
+  df_v <- pooled_by_group_cond %>% filter(Variable == v)
+
+  g <- ggplot(df_v, aes(Time, Mean)) +
+    geom_point(size = 1.6) +
+    geom_line(linewidth = 0.9, color = "black") +
+    geom_smooth(method = "loess", span = 0.75, color = "black", linewidth = 1.2, se = FALSE) +
+    facet_grid(REST_VS_STRESS ~ Group) +
+    theme_bw(base_size = 13) +
+    theme(panel.grid = element_blank(), strip.text = element_text(face="bold")) +
+    labs(title = paste("Pooled LOESS –", v, "by Group × Condition"),
+         x = "Time (session)", y = paste("Mean", v))
+
+  ggsave(paste0("EDA_", v, "_ByGroupCond_Pooled.png"), g, width = 8, height = 6, dpi = 300)
+}
+
+```
+
+
+
+
+```{r}
+vars_full <- c("lnRMSSD","lnSDNN","lnRSA","PEP_msec")  # only vars measured at all T
+
+
+pooled_by_group_cond <- hrv %>%
+  pivot_longer(all_of(vars), names_to = "Variable", values_to = "Value") %>%
+  group_by(Variable, Time, Group, REST_VS_STRESS) %>%
+  summarise(Mean = mean(Value, na.rm = TRUE), .groups = "drop")
+
+for (v in vars_full) {
+
+  df_v <- pooled_by_group_cond %>% filter(Variable == v)
+
+  # REST rows for each group
+  df_rest <- df_v %>% 
+    filter(REST_VS_STRESS == "Rest") %>%
+    arrange(Group, Time)
+
+  g <- ggplot(df_v, aes(Time, Mean)) +
+    
+    # 1️⃣ Straight line only for REST × each Group
+    geom_line(
+      data = df_rest, 
+      aes(Time, Mean, group = Group),
+      linewidth = 1.1,
+      color = "black"
+    ) +
+    
+    # 2️⃣ Points for all
+    geom_point(size = 1.6) +
+    
+    # 3️⃣ LOESS for all panels (stress has full 4–5 points)
+    geom_smooth(
+      method = "loess",
+      span = 0.75,
+      color = "black",
+      linewidth = 1.2,
+      se = FALSE
+    ) +
+    
+    facet_grid(REST_VS_STRESS ~ Group) +
+    
+    theme_bw(base_size = 13) +
+    theme(
+      panel.grid = element_blank(),
+      strip.text = element_text(face = "bold")
+    ) +
+    
+    labs(
+      title = paste("Pooled LOESS –", v, "by Group × Condition"),
+      x = "Time (session)",
+      y = paste("Mean", v)
+    )
+
+  ggsave(
+    paste0("EDA_", v, "_ByGroupCond_Pooled.png"),
+    g, width = 9, height = 6, dpi = 300
+  )
+}
+
+```
+
+
+```{r}
+v <- "lnSCL"
+
+df_v <- pooled_by_group_cond %>% filter(Variable == v)
+
+# Order by group and time so lines connect cleanly
+df_v <- df_v %>% arrange(Group, REST_VS_STRESS, Time)
+
+g <- ggplot(df_v, aes(Time, Mean, group = Group)) +
+  
+  # Connect the 2 time points with a line (per group)
+  geom_line(linewidth = 1.1, color = "black") +
+  
+  # Draw the points
+  geom_point(size = 2) +
+  
+  # No LOESS — only two time points
+  facet_grid(REST_VS_STRESS ~ Group) +
+  
+  theme_bw(base_size = 13) +
+  theme(
+    panel.grid = element_blank(),
+    strip.text = element_text(face="bold")
+  ) +
+  labs(
+    title = paste("Pooled Mean –", v, "by Group × Condition"),
+    x = "Time (session)",
+    y = paste("Mean", v)
+  )
+
+ggsave(
+  paste0("EDA_", v, "_ByGroupCond_Pooled.png"),
+  g, width = 8, height = 6, dpi = 300
+)
+
+
+
+```
+
+
+
+  
+  
+## Exploration of Variance  
+    
+Setup  
+  
+```{r}
+library(tidyverse)
+
+hrv <- hrv %>%
+  mutate(
+    Group = factor(Group, levels = c(0,1), labels = c("Low/Medium","High")),
+    REST_VS_STRESS = factor(REST_VS_STRESS, levels = c(0,1), labels = c("Rest","Stress"))
+  )
+
+vars <- c("lnRMSSD","lnSDNN","lnHF","lnLF","lnLFHF","lnRSA","lnSCL","PEP_msec")
+```
+
+```{r}
+hrv %>% group_by(hrv$`_Imputation_`) %>% select(PEP_msec) %>%summarise(var(PEP_msec))
+```
+```{r}
+help(dplyr)
+```
+
+  
+  
+Step 1 — Helper function to compute squared residuals    
+
+```{r}
+compute_sqres <- function(data, var, span = 0.75) {
+  v <- data[[var]]
+
+  # fit LOESS mean for this imputation & variable
+  fit <- loess(v ~ Time, data = data, span = span, degree = 2)
+
+  # residuals
+  data$mu_hat <- predict(fit, newdata = data)
+  data$res_sq <- (v - data$mu_hat)^2
+
+  return(data)
+}
+
+```
+
+  
+Step 2 — LOESS plotting function for squared residuals  
+  
+```{r}
+plot_var_loess <- function(data, var, title_prefix = "", facets = NULL) {
+
+  p <- ggplot(data, aes(x = Time, y = res_sq)) +
+    geom_point(alpha = 0.3, size = 1) +
+    geom_smooth(method = "loess", span = 0.75, color = "black", linewidth = 1.1) +
+    theme_bw(base_size = 13) +
+    theme(panel.grid = element_blank(),
+          strip.text = element_text(face="bold", size=12)) +
+    labs(
+      title = paste0(title_prefix, var),
+      x = "Time (session)",
+      y = "Squared residuals"
+    )
+
+  if (!is.null(facets)) {
+    p <- p + facets
+  }
+
+  return(p)
+}
+
+```
+
+   
+### 3.1 OVERALL variance vs Time
+  
+  
+(a) Per imputation  
+  
+```{r}
+for (v in vars) {
+  for (m in sort(unique(hrv$`_Imputation_`))) {
+
+    df_m <- hrv %>% filter(`_Imputation_` == m)
+    df_m <- compute_sqres(df_m, v)
+
+    g <- plot_var_loess(df_m, v,
+            title_prefix = paste0("Variance LOESS (Imp=", m, ") – "))
+
+    ggsave(paste0("VAR_", v, "_Overall_Imp", m, ".png"),
+           g, width = 7.5, height = 5.5, dpi = 300)
+  }
+}
+```
+  
+  
+
+    
+    
+    
+## Variance vs Time × Group
+```{r}
+hrv <- hrv %>%
+  mutate(
+    Group = dplyr::case_when(
+      Group == 0 ~ "Low/Medium",
+      Group == 1 ~ "High",
+      TRUE       ~ NA_character_
+    ),
+    Group = factor(Group, levels = c("Low/Medium","High"))
+  )
+
+table(hrv$Group, useNA = "ifany")
+
+```
+
+
+
+(a) Per imputation  
+  
+```{r}
+library(dplyr)
+library(ggplot2)
+library(purrr)
+
+compute_sqres_all_imps <- function(data, var, span = 0.75) {
+  # data: full hrv (all imputations)
+  # var:  character, e.g. "lnRMSSD"
+  
+  data %>%
+    group_by(`_Imputation_`) %>%
+    group_modify(~ {
+      y  <- .x[[var]]
+      fit <- loess(y ~ Time, data = .x, span = span, degree = 2)
+      mu_hat <- predict(fit, newdata = .x)
+      
+      .x %>%
+        mutate(
+          Variable = var,
+          mu_hat   = mu_hat,
+          res_sq   = (y - mu_hat)^2
+        )
+    }) %>%
+    ungroup()
+}
+```
+  
+```{r}
+vars <- c("lnRMSSD","lnSDNN","lnHF","lnLF","lnLFHF","lnRSA","PEP_msec")
+
+var <- "lnSCL"
+
+for (v in vars) {
+  sqres_v <- compute_sqres_all_imps(hrv, v)
+
+  for (m in sort(unique(sqres_v$`_Imputation_`))) {
+    df_m <- sqres_v %>% filter(`_Imputation_` == m)
+
+    g <- ggplot(df_m, aes(x = Time, y = res_sq)) +
+      geom_point(alpha = 0.3, size = 1) +
+      geom_smooth(method = "loess", span = 0.75,
+                  color = "black", linewidth = 1.1) +
+      facet_grid(. ~ Group) +
+      theme_bw(base_size = 13) +
+      #scale_x_continuous(breaks = c(1, 2), limits = c(1, 2)) +
+      theme(panel.grid = element_blank(),
+            strip.text = element_text(face = "bold", size = 12)) +
+      labs(title = paste0("Variance LOESS by Group (Imp=", m, ") – ", v),
+           x = "Time (session)",
+           y = "Squared residuals")
+
+    ggsave(paste0("VAR_", v, "_ByGroup_Imp", m, ".png"),
+           g, width = 8, height = 5.5, dpi = 300)
+  }
+}
+
+```
+
+  
+
+  
+## Variance vs Time × Condition
+
+
+(a) Per imputation
+    
+    
+```{r}
+vars <- c("lnRMSSD","lnSDNN","lnHF","lnLF","lnLFHF","lnRSA","PEP_msec")
+
+var <- "lnSCL"
+
+for (v in var) {
+  for (m in unique(hrv$`_Imputation_`)) {
+    df_m <- hrv %>% filter(`_Imputation_` == m)
+    df_m <- compute_sqres(df_m, v)
+
+    
+    
+    g <- plot_var_loess(
+          df_m, v,
+          title_prefix = paste0("Variance LOESS by Condition (Imp=", m, ") – "),
+          facets = facet_grid(REST_VS_STRESS ~ .)
+        )
+
+    ggsave(paste0("VAR_", v, "_ByCond_Imp", m, ".png"),
+           g, width = 7, height = 6, dpi = 300)
+  }
+}
+
+```
+
+  
+## Variance vs Time × Group × Condition
+(a) Per imputation  
+  
+```{r}
+
+var <- 'lnSCL'
+for (v in var) {
+  for (m in unique(hrv$`_Imputation_`)) {
+    df_m <- hrv %>% filter(`_Imputation_` == m)
+    df_m <- compute_sqres(df_m, v)
+    
+    g <- ggplot(df_m, aes(x = Time, y = res_sq)) +
+      geom_point(alpha = 0.3, size = 1) +
+      geom_smooth(method = "loess", span = 0.75,
+                  color = "black", linewidth = 1.1) +
+      facet_grid(REST_VS_STRESS ~ Group) +
+      theme_bw(base_size = 13) +
+      scale_x_continuous(breaks = c(1, 2), limits = c(1, 2)) +
+      theme(panel.grid = element_blank(),
+            strip.text = element_text(face = "bold", size = 12)) +
+      labs(title = paste0("Variance LOESS by Group × Condition (Imp=", m, ") – ", v),
+           x = "Time (session)",
+           y = "Squared residuals")
+
+    ggsave(paste0("VAR_", v, "_ByGroupCond_Imp", m, ".png"),
+           g, width = 8, height = 6, dpi = 300)
+  
+
+
+  }
+}
+
+```
+
+
+
+  
+## Correlation  
+SAS  
+
+
+```{r}
+library(dplyr)
+library(tidyr)
+
+imp_use <- 1  # choose which imputation
+
+lnSCL_long <- hrv %>%
+  filter(`_Imputation_` == imp_use) %>%    # keep one imputation
+  filter(!is.na(lnSCL)) %>%
+  select(Subject_ID, Time, lnSCL)
+
+```
+
+
+```{r}
+lnSCL_long <- lnSCL_long %>%
+  group_by(Subject_ID, Time) %>%
+  summarise(lnSCL = mean(lnSCL, na.rm = TRUE), .groups = "drop")
+
+```
+
+
+```{r}
+lnSCL_wide <- lnSCL_long %>%
+  pivot_wider(
+    names_from  = Time,
+    values_from = lnSCL,
+    names_prefix = "T"
+  ) %>%
+  select(Subject_ID, T1, T2)
+
+```
+
+
+```{r}
+str(lnSCL_wide)
+
+lnSCL_wide <- lnSCL_wide %>%
+  mutate(
+    T1 = as.numeric(T1),
+    T2 = as.numeric(T2)
+  )
+
+```
+
+
+```{r}
+summary(lnSCL_wide$T1)
+summary(lnSCL_wide$T2)
+
+sd_T1 <- sd(lnSCL_wide$T1, na.rm = TRUE)
+sd_T2 <- sd(lnSCL_wide$T2, na.rm = TRUE)
+
+sd_T1
+sd_T2
+
+```
+
+
+
+```{r}
+cor_lnSCL <- cor(lnSCL_wide$T1, lnSCL_wide$T2, use = "complete.obs")
+cor_lnSCL
+
+```
+
+
+```{r}
+imp_use <- 1:10  # all imputations
+
+lnSCL_pairs <- hrv %>%
+  filter(!is.na(lnSCL),
+         Time %in% c(1, 2)) %>%
+  select(`_Imputation_`, Subject_ID, Time, lnSCL) %>%
+  group_by(`_Imputation_`, Subject_ID, Time) %>%
+  summarise(lnSCL = mean(lnSCL), .groups = "drop") %>%
+  pivot_wider(names_from = Time, values_from = lnSCL, names_prefix = "T") %>%
+  mutate(
+    T1 = as.numeric(T1),
+    T2 = as.numeric(T2)
+  )
+
+lnSCL_pairs %>%
+  group_by(`_Imputation_`) %>%
+  summarise(
+    n_pairs = sum(complete.cases(T1, T2)),
+    cor_lnSCL = ifelse(
+      n_pairs > 1 && sd(T1, na.rm = TRUE) > 0 && sd(T2, na.rm = TRUE) > 0,
+      cor(T1, T2, use = "complete.obs"),
+      NA_real_
+    )
+  )
+
+```
+
+
+
+   
+
+## Individual Profiles  
+  
+Setup  
+
+```{r}
+library(dplyr)
+library(ggplot2)
+
+# Make sure factors are labeled
+hrv <- hrv %>%
+  mutate(
+    Group = factor(Group, levels = c(0,1), labels = c("Low/Medium","High")),
+    REST_VS_STRESS = factor(REST_VS_STRESS, levels = c(0,1), labels = c("Rest","Stress"))
+  )
+
+vars <- c("lnRMSSD","lnSDNN","lnRSA","PEP_msec")
+
+irr_vars <- c('lnHF', 'lnLF', 'lnLFHF')
+var <- 'lnSCL'
+imps <- sort(unique(hrv$`_Imputation_`))
+
+```
+    
+
+
+Helper: plot individual profiles for one variable      
+  
+```{r}
+plot_profiles_overall_mean <- function(data, var) {
+  mean_df <- data %>%
+    group_by(Time) %>%
+    summarise(mean_y = mean(.data[[var]], na.rm = TRUE), .groups = "drop")
+
+  ggplot(data, aes(x = Time, y = .data[[var]], group = Subject_ID)) +
+    geom_line(alpha = 0.25) +
+    geom_line(data = mean_df,
+              aes(x = Time, y = mean_y, group = NULL),
+              color = "red", linewidth = 1.1) +
+    theme_bw(base_size = 13) +
+    scale_x_continuous(breaks = c(1, 2), limits = c(1, 2)) +
+    theme(panel.grid = element_blank()) +
+    labs(
+      title = paste0("Individual profiles with mean – ", var,
+                     " (Imp = ", unique(data$`_Imputation_`), ")"),
+      x = "Time (session)",
+      y = var
+    )
+}
+```
+    
+  
+```{r}
+for (m in imps) {
+  hrv_imp <- hrv %>% filter(`_Imputation_` == m)
+
+  for (v in var) {
+    g <- plot_profiles_overall_mean(hrv_imp, v)
+    ggsave(paste0("IP_", v, "_Overall_Imp", m, ".png"),
+           g, width = 7.5, height = 5.5, dpi = 300)
+  }
+}
+```
+
+  
+
+  
+### Profiles by Group    
+  
+```{r}
+plot_profiles_by_group <- function(data, var) {
+  mean_df <- data %>%
+    group_by(Group, Time) %>%
+    summarise(mean_y = mean(.data[[var]], na.rm = TRUE), .groups = "drop")
+
+  ggplot(data, aes(x = Time, y = .data[[var]], group = Subject_ID)) +
+    geom_line(alpha = 0.25) +
+    geom_line(data = mean_df,
+              aes(x = Time, y = mean_y, group = NULL),
+              color = "red", linewidth = 1.1) +
+    facet_grid(. ~ Group) +
+    scale_x_continuous(breaks = c(1, 2), limits = c(1, 2)) +
+    theme_bw(base_size = 13) +
+    theme(panel.grid = element_blank(),
+          strip.text = element_text(face = "bold")) +
+    labs(
+      title = paste0("Individual profiles by Group – ", var,
+                     " (Imp = ", unique(data$`_Imputation_`), ")"),
+      x = "Time (session)",
+      y = var
+    )
+}
+
+```
+    
+    
+```{r}
+for (m in imps) {
+  hrv_imp <- hrv %>% filter(`_Imputation_` == m)
+
+  for (v in var) {
+    g <- plot_profiles_by_group(hrv_imp, v)
+    ggsave(paste0("IP_", v, "_ByGroup_Imp", m, ".png"),
+           g, width = 8, height = 5.5, dpi = 300)
+  }
+}
+
+```
+  
+      
+  
+### Profiles by Condition (REST vs STRESS)  
+  
+```{r}
+plot_profiles_by_cond <- function(data, var) {
+  mean_df <- data %>%
+    group_by(REST_VS_STRESS, Time) %>%
+    summarise(mean_y = mean(.data[[var]], na.rm = TRUE), .groups = "drop")
+
+  ggplot(data, aes(x = Time, y = .data[[var]], group = Subject_ID)) +
+    geom_line(alpha = 0.25) +
+    geom_line(data = mean_df,
+              aes(x = Time, y = mean_y, group = NULL),
+              color = "red", linewidth = 1.1) +
+    facet_grid(REST_VS_STRESS ~ .) +
+    theme_bw(base_size = 13) +
+    scale_x_continuous(breaks = c(1, 2), limits = c(1, 2)) +
+    theme(panel.grid = element_blank(),
+          strip.text = element_text(face = "bold")) +
+    labs(
+      title = paste0("Individual profiles by Condition – ", var,
+                     " (Imp = ", unique(data$`_Imputation_`), ")"),
+      x = "Time (session)",
+      y = var
+    )
+}
+```
+    
+```{r}
+hrv %>% group_by(hrv$`_Imputation_`) %>% select(Subject_ID, lnSCL, Time, REST_VS_STRESS) %>% filter(!is.na(lnSCL))
+```
+
+    
+    
+    
+```{r}
+for (m in imps) {
+  hrv_imp <- hrv %>% filter(`_Imputation_` == m)
+
+  for (v in var) {
+    g <- plot_profiles_by_cond(hrv_imp, v)
+    ggsave(paste0("IP_", v, "_ByCond_Imp", m, ".png"),
+           g, width = 7, height = 6, dpi = 300)
+  }
+}
+```
+
+   
+### Profiles by Group × Condition  
+  
+```{r}
+plot_profiles_by_group_cond <- function(data, var) {
+  mean_df <- data %>%
+    group_by(Group, REST_VS_STRESS, Time) %>%
+    summarise(mean_y = mean(.data[[var]], na.rm = TRUE), .groups = "drop")
+
+  ggplot(data, aes(x = Time, y = .data[[var]], group = Subject_ID)) +
+    geom_line(alpha = 0.25) +
+    geom_line(data = mean_df,
+              aes(x = Time, y = mean_y, group = NULL),
+              color = "red", linewidth = 1.1) +
+    facet_grid(REST_VS_STRESS ~ Group) +
+    theme_bw(base_size = 13) +
+    scale_x_continuous(breaks = c(1, 2), limits = c(1, 2)) +
+    theme(panel.grid = element_blank(),
+          strip.text = element_text(face = "bold")) +
+    labs(
+      title = paste0("Individual profiles by Group × Condition – ", var,
+                     " (Imp = ", unique(data$`_Imputation_`), ")"),
+      x = "Time (session)",
+      y = var
+    )
+}
+```
+
+
+```{r}
+hrv %>%
+  filter(!is.na(lnSCL)) %>%
+  count(REST_VS_STRESS, Group, Time)
+
+```
+
+
+  
+```{r}
+for (m in imps) {
+  hrv_imp <- hrv %>% filter(`_Imputation_` == m)
+
+  for (v in var) {
+    g <- plot_profiles_by_group_cond(hrv_imp, v)
+    ggsave(paste0("IP_", v, "_ByGroupCond_Imp", m, ".png"),
+           g, width = 8, height = 6, dpi = 300)
+  }
+}
+
+```
+
+
+
+
+
+
+
+```{r}
+vars_partial <- c("lnHF", "lnLF", "lnLFHF")
+```
+
+
+```{r}
+plot_profiles_overall_mean_partial <- function(data, var) {
+  df <- data %>%
+    filter(!is.na(.data[[var]]),
+           Time %in% c(1, 3, 4, 6))   # only times where HF/LF/LFHF exist
+
+  mean_df <- df %>%
+    group_by(Time) %>%
+    summarise(mean_y = mean(.data[[var]], na.rm = TRUE), .groups = "drop")
+
+  ggplot(df, aes(x = Time, y = .data[[var]], group = Subject_ID)) +
+    geom_line(alpha = 0.25) +
+    geom_line(data = mean_df,
+              aes(x = Time, y = mean_y, group = NULL),
+              color = "red", linewidth = 1.1) +
+    theme_bw(base_size = 13) +
+    theme(panel.grid = element_blank()) +
+    scale_x_continuous(
+      breaks = c(1, 3, 4, 6),
+      limits = c(1, 6)
+    ) +
+    labs(
+      title = paste0("Individual profiles with mean – ", var,
+                     " (Imp = ", paste(unique(df$`_Imputation_`), collapse = ","), ")"),
+      x = "Time (session)",
+      y = var
+    )
+}
+
+```
+
+
+
+```{r}
+for (m in imps) {
+  hrv_imp <- hrv %>% filter(`_Imputation_` == m)
+
+  for (v in vars_partial) {
+    g <- plot_profiles_overall_mean_partial(hrv_imp, v)
+    ggsave(paste0("IP_", v, "_Overall_Imp", m, ".png"),
+           g, width = 7.5, height = 5.5, dpi = 300)
+  }
+}
+
+```
+
+
+
+
+
+```{r}
+plot_profiles_by_group_cond_partial <- function(data, var) {
+  df <- data %>%
+    filter(!is.na(.data[[var]]),
+           Time %in% c(1, 3, 4, 6))
+
+  mean_df <- df %>%
+    group_by(Group, REST_VS_STRESS, Time) %>%
+    summarise(mean_y = mean(.data[[var]], na.rm = TRUE), .groups = "drop")
+
+  ggplot(df, aes(x = Time, y = .data[[var]], group = Subject_ID)) +
+    geom_line(alpha = 0.25) +
+    geom_line(data = mean_df,
+              aes(x = Time, y = mean_y, group = NULL),
+              color = "red", linewidth = 1.1) +
+    facet_grid(REST_VS_STRESS ~ Group) +
+    theme_bw(base_size = 13) +
+    theme(panel.grid = element_blank(),
+          strip.text = element_text(face = "bold")) +
+    scale_x_continuous(
+      breaks = c(1, 3, 4, 6),
+      limits = c(1, 6)
+    ) +
+    labs(
+      title = paste0("Individual profiles by Group × Condition – ", var,
+                     " (Imp = ", paste(unique(df$`_Imputation_`), collapse = ","), ")"),
+      x = "Time (session)",
+      y = var
+    )
+}
+
+```
+
+
+```{r}
+for (m in imps) {
+  hrv_imp <- hrv %>% filter(`_Imputation_` == m)
+
+  for (v in vars_partial) {
+    g <- plot_profiles_by_group_cond_partial(hrv_imp, v)
+    ggsave(paste0("IP_", v, "_ByGroupCond_Imp", m, ".png"),
+           g, width = 8, height = 6, dpi = 300)
+  }
+}
+
+```
+
+
+
+
+
+```{r}
+plot_profiles_by_group_partial <- function(data, var) {
+  df <- data %>%
+    filter(!is.na(.data[[var]]),
+           Time %in% c(1, 3, 4, 6))
+
+  mean_df <- df %>%
+    group_by(Group, Time) %>%
+    summarise(mean_y = mean(.data[[var]], na.rm = TRUE), .groups = "drop")
+
+  ggplot(df, aes(x = Time, y = .data[[var]], group = Subject_ID)) +
+    geom_line(alpha = 0.25) +
+    geom_line(data = mean_df,
+              aes(x = Time, y = mean_y, group = NULL),
+              color = "red", linewidth = 1.1) +
+    facet_grid(. ~ Group) +
+    theme_bw(base_size = 13) +
+    theme(
+      panel.grid = element_blank(),
+      strip.text = element_text(face = "bold")
+    ) +
+    scale_x_continuous(
+      breaks = c(1, 3, 4, 6),
+      limits = c(1, 6)
+    ) +
+    labs(
+      title = paste0("Individual profiles by Group – ", var,
+                     " (Imp = ", paste(unique(df$`_Imputation_`), collapse = ","), ")"),
+      x = "Time (session)",
+      y = var
+    )
+}
+
+```
+
+
+```{r}
+for (m in imps) {
+  hrv_imp <- hrv %>% filter(`_Imputation_` == m)
+
+  for (v in vars_partial) {
+    g <- plot_profiles_by_group_partial(hrv_imp, v)
+    ggsave(paste0("IP_", v, "_ByGroup_Imp", m, ".png"),
+           g, width = 8, height = 5.5, dpi = 300)
+  }
+}
+
+```
+
+
+
+```{r}
+plot_profiles_by_cond_partial <- function(data, var) {
+  df <- data %>%
+    filter(!is.na(.data[[var]]),
+           Time %in% c(1, 3, 4, 6))
+
+  mean_df <- df %>%
+    group_by(REST_VS_STRESS, Time) %>%
+    summarise(mean_y = mean(.data[[var]], na.rm = TRUE), .groups = "drop")
+
+  ggplot(df, aes(x = Time, y = .data[[var]], group = Subject_ID)) +
+    geom_line(alpha = 0.25) +
+    geom_line(data = mean_df,
+              aes(x = Time, y = mean_y, group = NULL),
+              color = "red", linewidth = 1.1) +
+    facet_grid(REST_VS_STRESS ~ .) +
+    theme_bw(base_size = 13) +
+    theme(
+      panel.grid = element_blank(),
+      strip.text = element_text(face = "bold")
+    ) +
+    scale_x_continuous(
+      breaks = c(1, 3, 4, 6),
+      limits = c(1, 6)
+    ) +
+    labs(
+      title = paste0("Individual profiles by Condition – ", var,
+                     " (Imp = ", paste(unique(df$`_Imputation_`), collapse = ","), ")"),
+      x = "Time (session)",
+      y = var
+    )
+}
+
+```
+
+
+```{r}
+for (m in imps) {
+  hrv_imp <- hrv %>% filter(`_Imputation_` == m)
+
+  for (v in vars_partial) {
+    g <- plot_profiles_by_cond_partial(hrv_imp, v)
+    ggsave(paste0("IP_", v, "_ByCond_Imp", m, ".png"),
+           g, width = 7, height = 6, dpi = 300)
+  }
+}
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+### Data Description  
+  
