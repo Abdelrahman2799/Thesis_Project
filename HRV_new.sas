@@ -566,9 +566,12 @@ run;
 	Mean structure reduction
   ==============================*/
 
-proc mixed data=hrv_long method=ml;
+proc mixed data=hrv_long nobound method=ml;
     where _Imputation_ = 2;
-    class Subject_ID Group REST_VS_STRESS Gender Time;
+    class Subject_ID Time
+		  Group (ref='0')
+		  REST_VS_STRESS (ref='0') 
+		  Gender (ref='m');
 
     model lnRMSSD =
         Group
@@ -589,9 +592,12 @@ run;
 
 
 
-proc mixed data=hrv_long method=ml;
+proc mixed data=hrv_long nobound method=ml;
     where _Imputation_ = 2;
-    class Subject_ID Group REST_VS_STRESS Gender Time;
+    class Subject_ID Time
+		  Group (ref='0')
+		  REST_VS_STRESS (ref='0') 
+		  Gender (ref='m');
 
     model lnRMSSD =
         Group
@@ -610,9 +616,13 @@ run;
 
 
 /*Reduce more*/
-proc mixed data=hrv_long method=ml;
+proc mixed data=hrv_long nobound method=ml;
     where _Imputation_ = 2;
-    class Subject_ID Group REST_VS_STRESS Gender Time;
+    class 
+        Subject_ID Time
+        Group          (ref='0')
+        REST_VS_STRESS (ref='0')
+        Gender         (ref='m');
 
     model lnRMSSD =
         Group
@@ -629,29 +639,7 @@ proc mixed data=hrv_long method=ml;
     ods output FitStatistics=Fit_noRG;
 run;
 
-
-/*Reduce more*/
-proc mixed data=hrv_long method=ml;
-    where _Imputation_ = 1;
-    class Subject_ID Group REST_VS_STRESS Gender Time;
-
-    model lnRMSSD =
-        Group
-        REST_VS_STRESS
-        Gender
-/*        Group*REST_VS_STRESS*/
-/*        Group*Gender*/
-        /* REST_VS_STRESS*Gender removed */
-        / solution;
-
-    random intercept / subject=Subject_ID;
-    repeated Time / subject=Subject_ID type=AR(1);
-
-    ods output FitStatistics=Fit_noRG;
-run;
 /*Do not forget to compare the last model with the first one*/
-data LRT; p_val = 1 - probchi(0, 1);run;
-proc print data=LRT; run;
 
 
 
@@ -668,7 +656,10 @@ run;
 /* From your PROC MIXED */
 proc mixed data=hrv_long nobound method=reml;
     by _Imputation_;
-    class Subject_ID Group REST_VS_STRESS Gender Time;
+        class Subject_ID Time
+		  Group (ref='0')
+		  REST_VS_STRESS (ref='0') 
+		  Gender (ref='m');
 
     model lnRMSSD =
         Group
@@ -706,11 +697,6 @@ data RMSSD_Parms2;
 
     keep _Imputation_ Parameter Estimate StdErr;
 run;
-
-proc sort data=RMSSD_Parms2;
-    by Parameter _Imputation_;
-run;
-
 proc print data=RMSSD_Parms2(obs=20);
 run;
 
@@ -723,6 +709,70 @@ proc mianalyze data=RMSSD_Parms2;
     modeleffects Estimate; * variable that holds the coefficient;
     stderr StdErr;         * variable that holds the SE;
 run;
+
+
+/*Interaction is not significant, fit an additive model to be able to correctly interpret the overall main effects*/
+
+proc mixed data=hrv_long nobound method=reml;
+    by _Imputation_;
+        class Subject_ID Time
+		  Group (ref='0')
+		  REST_VS_STRESS (ref='0') 
+		  Gender (ref='m');
+
+    model lnRMSSD =
+        Group
+        REST_VS_STRESS
+/*        Group*REST_VS_STRESS*/
+        Gender
+        / solution ddfm=kr;
+    random intercept / subject=Subject_ID;
+    repeated Time / subject=Subject_ID type=AR(1);
+
+    ods output SolutionF = RMSSD_SolutionF;
+run;
+
+/* Keep only the estimable rows (no reference levels) */
+data RMSSD_Parms_main;
+    set RMSSD_SolutionF;
+    where StdErr ne .;  * drop rows like Group=1 with StdErr=. ;
+run;
+
+proc print data=RMSSD_Parms_main(obs=20);
+run;
+
+
+
+data RMSSD_Parms_main;
+    set RMSSD_Parms_main;
+    length Parameter $40;
+
+    /* create a single label for each parameter */
+    if Effect = 'Intercept' then Parameter = 'Intercept';
+    else if Effect = 'Group' then Parameter = 'Group_high_vs_lowmed';
+    else if Effect = 'REST_VS_STRESS' then Parameter = 'Stress_vs_rest';
+/*    else if Effect = 'Group*REST_VS_STRESS' then Parameter = 'Interaction_GroupxStress';*/
+    else if Effect = 'Gender' then Parameter = 'Female_vs_male';
+
+    keep _Imputation_ Parameter Estimate StdErr;
+run;
+proc print data=RMSSD_Parms_main(obs=20);
+run;
+
+proc sort data=RMSSD_Parms_main;
+    by Parameter _Imputation_;
+run;
+
+proc mianalyze data=RMSSD_Parms_main;
+    by Parameter;          * one pooled result per parameter label;
+    modeleffects Estimate; * variable that holds the coefficient;
+    stderr StdErr;         * variable that holds the SE;
+run;
+
+
+
+
+
 
 
 
@@ -751,7 +801,10 @@ run;
 proc glm data=hrv_long;
     by _Imputation_;
 
-    class Group REST_VS_STRESS Gender;
+    class Subject_ID 
+		  Group (ref='0')
+		  REST_VS_STRESS (ref='0') 
+		  Gender (ref='m');
 
     model lnSDNN =
         /* Main effects */
@@ -877,9 +930,12 @@ run;
 	Mean structure reduction
   ==============================*/
 
-proc mixed data=hrv_long method=ml;
-    where _Imputation_ = 5;
-    class Subject_ID Group REST_VS_STRESS Gender Time;
+proc mixed data=hrv_long nobound method=ml;
+    where _Imputation_ = 8;
+	class Subject_ID Time
+		  Group (ref='0')
+		  REST_VS_STRESS (ref='0') 
+		  Gender (ref='m');
 
     model lnSDNN =
         Group
@@ -900,9 +956,12 @@ run;
 
 
 
-proc mixed data=hrv_long method=ml;
-    where _Imputation_ = 5;
-    class Subject_ID Group REST_VS_STRESS Gender Time;
+proc mixed data=hrv_long nobound method=ml;
+    where _Imputation_ = 8;
+ 	class Subject_ID Time
+		  Group (ref='0')
+		  REST_VS_STRESS (ref='0') 
+		  Gender (ref='m');
 
     model lnSDNN =
         Group
@@ -921,9 +980,12 @@ run;
 
 
 /*Reduce more*/
-proc mixed data=hrv_long method=ml;
-    where _Imputation_ = 5;
-    class Subject_ID Group REST_VS_STRESS Gender Time;
+proc mixed data=hrv_long nobound method=ml;
+    where _Imputation_ = 8;
+    class Subject_ID Time
+		  Group (ref='0')
+		  REST_VS_STRESS (ref='0') 
+		  Gender (ref='m');
 
     model lnSDNN =
         Group
@@ -941,25 +1003,6 @@ proc mixed data=hrv_long method=ml;
 run;
 
 
-/*Reduce more*/
-proc mixed data=hrv_long method=ml;
-    where _Imputation_ = 1;
-    class Subject_ID Group REST_VS_STRESS Gender Time;
-
-    model lnRMSSD =
-        Group
-        REST_VS_STRESS
-        Gender
-/*        Group*REST_VS_STRESS*/
-/*        Group*Gender*/
-        /* REST_VS_STRESS*Gender removed */
-        / solution;
-
-    random intercept / subject=Subject_ID;
-    repeated Time / subject=Subject_ID type=AR(1);
-
-    ods output FitStatistics=Fit_noRG;
-run;
 /*Do not forget to compare the last model with the first one*/
 
 
@@ -978,7 +1021,10 @@ run;
 /* From your PROC MIXED */
 proc mixed data=hrv_long nobound method=reml;
     by _Imputation_;
-    class Subject_ID Group REST_VS_STRESS Gender Time;
+    class Subject_ID Time
+		  Group (ref='0')
+		  REST_VS_STRESS (ref='0') 
+		  Gender (ref='m');
 
     model lnSDNN =
         Group
@@ -1032,6 +1078,67 @@ proc mianalyze data=SDNN_Parms2;
     modeleffects Estimate; * variable that holds the coefficient;
     stderr StdErr;         * variable that holds the SE;
 run;
+
+
+
+
+proc mixed data=hrv_long nobound method=reml;
+    by _Imputation_;
+    class Subject_ID Time
+		  Group (ref='0')
+		  REST_VS_STRESS (ref='0') 
+		  Gender (ref='m');
+
+    model lnSDNN =
+        Group
+        REST_VS_STRESS
+        Gender
+        / solution ddfm=kr;
+    random intercept / subject=Subject_ID;
+    repeated Time / subject=Subject_ID type=AR(1);
+
+    ods output SolutionF = SDNN_SolutionF_main;
+run;
+data SDNN_Parms_main;
+    set SDNN_SolutionF_main;
+    where StdErr ne .;  * drop rows like Group=1 with StdErr=. ;
+run;
+
+data SDNN_Parms_main;
+    set SDNN_Parms_main;
+    length Parameter $40;
+
+    /* create a single label for each parameter */
+    if Effect = 'Intercept' then Parameter = 'Intercept';
+    else if Effect = 'Group' then Parameter = 'Group_high_vs_lowmed';
+    else if Effect = 'REST_VS_STRESS' then Parameter = 'Stress_vs_rest';
+    else if Effect = 'Gender' then Parameter = 'Female_vs_male';
+
+    keep _Imputation_ Parameter Estimate StdErr;
+run;
+
+proc sort data=SDNN_Parms_main;
+    by Parameter _Imputation_;
+run;
+
+proc print data=SDNN_Parms_main(obs=20); run;
+
+proc mianalyze data=SDNN_Parms_main;
+    by Parameter;          * one pooled result per parameter label;
+    modeleffects Estimate; * variable that holds the coefficient;
+    stderr StdErr;         * variable that holds the SE;
+run;
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1343,7 +1450,11 @@ run;
 
 
 
-
+proc import datafile='C:/Users/Ahmed/OneDrive/Documents/Masters/Second_Year/Master Thesis Data Science/Prenatal stress study/data/HRV/hrv_fcs_imputed_Long.xlsx'
+dbms=xlsx
+out=work.hrv_long
+replace;
+run;
 
 
 
