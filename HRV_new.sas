@@ -444,7 +444,7 @@ run;
 proc glm data=hrv_long;
     by _Imputation_;
 
-    class Group REST_VS_STRESS Gender;
+    class Group(ref='0') REST_VS_STRESS(ref='0') Gender(ref='m');
 
     model lnRMSSD =
         /* Main effects */
@@ -557,8 +557,15 @@ proc mixed data=rmssd_olsresid;
     ods output FitStatistics=CS_AIC;
 run;
 
-
-
+/*4) Simple*/
+proc mixed data=rmssd_olsresid;
+    by _Imputation_;
+    class Subject_ID Time;
+    model r_lnRMSSD = ;
+    random intercept / subject=Subject_ID;
+    repeated Time / subject=Subject_ID type=simple;
+    ods output FitStatistics=Simple_AIC;
+run;
 /*Random intercept with AR(1)*/
 
 
@@ -915,7 +922,15 @@ proc mixed data=sdnn_olsresid;
     ods output FitStatistics=CS_AIC;
 run;
 
-
+/*4) Simple*/
+proc mixed data=sdnn_olsresid;
+    by _Imputation_;
+    class Subject_ID Time;
+    model r_lnSDNN = ;
+    random intercept / subject=Subject_ID;
+    repeated Time / subject=Subject_ID type=simple;
+    ods output FitStatistics=simple_AIC;
+run;
 
 
 
@@ -1160,7 +1175,7 @@ run;
 proc glm data=hrv_long;
     by _Imputation_;
 
-    class Group REST_VS_STRESS Gender;
+    class Group(ref='0') REST_VS_STRESS(ref='0') Gender(ref='m');
 
     model lnRSA =
         /* Main effects */
@@ -1272,6 +1287,19 @@ proc mixed data=rsa_olsresid;
 run;
 
 
+/*Simple*/
+
+proc mixed data=rsa_olsresid;
+    by _Imputation_;
+    class Subject_ID Time;
+    model r_lnRSA = ;
+    random intercept / subject=Subject_ID;
+    repeated Time / subject=Subject_ID type=simple;
+    ods output FitStatistics=Simple_AIC;
+run;
+
+
+
 
 
 
@@ -1284,7 +1312,10 @@ run;
 
 proc mixed data=hrv_long method=ml;
     where _Imputation_ = 10;
-    class Subject_ID Group REST_VS_STRESS Gender Time;
+    class Subject_ID Time
+		  Group(ref='0')
+		  REST_VS_STRESS(ref='0') 
+		  Gender(ref='m');
 
     model lnRSA =
         Group
@@ -1307,7 +1338,10 @@ run;
 
 proc mixed data=hrv_long method=ml;
     where _Imputation_ = 10;
-    class Subject_ID Group REST_VS_STRESS Gender Time;
+    class Subject_ID Time
+		  Group(ref='0')
+		  REST_VS_STRESS(ref='0') 
+		  Gender(ref='m');
 
     model lnRSA =
         Group
@@ -1328,7 +1362,10 @@ run;
 /*Reduce more*/
 proc mixed data=hrv_long method=ml;
     where _Imputation_ = 10;
-    class Subject_ID Group REST_VS_STRESS Gender Time;
+    class Subject_ID Time
+		  Group(ref='0')
+		  REST_VS_STRESS(ref='0') 
+		  Gender(ref='m');
 
     model lnRSA =
         Group
@@ -1363,7 +1400,10 @@ run;
 /* From your PROC MIXED */
 proc mixed data=hrv_long nobound method=reml;
     by _Imputation_;
-    class Subject_ID Group REST_VS_STRESS Gender Time;
+    class Subject_ID Time
+		  Group(ref='0')
+		  REST_VS_STRESS(ref='0') 
+		  Gender(ref='m');
 
     model lnRSA =
         Group
@@ -1423,6 +1463,74 @@ run;
 
 
 
+/*Main effects model*/
+proc mixed data=hrv_long nobound method=reml;
+    by _Imputation_;
+    class Subject_ID Time
+		  Group(ref='0')
+		  REST_VS_STRESS(ref='0') 
+		  Gender(ref='m');
+
+    model lnRSA =
+        Group
+        REST_VS_STRESS
+/*        Group*REST_VS_STRESS*/
+        Gender
+        / solution ddfm=kr;
+    random intercept / subject=Subject_ID;
+    repeated Time / subject=Subject_ID type=AR(1);
+
+    ods output SolutionF = lnRSA_SolutionF;
+run;
+
+/* Keep only the estimable rows (no reference levels) */
+data RSA_Parms;
+    set lnRSA_SolutionF;
+    where StdErr ne .;  * drop rows like Group=1 with StdErr=. ;
+run;
+
+proc print data=RSA_Parms(obs=20);
+run;
+
+
+data RSA_Parms2;
+    set RSA_Parms;
+    length Parameter $40;
+
+    /* create a single label for each parameter */
+    if Effect = 'Intercept' then Parameter = 'Intercept';
+    else if Effect = 'Group' then Parameter = 'Group_high_vs_lowmed';
+    else if Effect = 'REST_VS_STRESS' then Parameter = 'Stress_vs_rest';
+/*    else if Effect = 'Group*REST_VS_STRESS' then Parameter = 'Interaction_GroupxStress';*/
+    else if Effect = 'Gender' then Parameter = 'Female_vs_male';
+
+    keep _Imputation_ Parameter Estimate StdErr;
+run;
+
+proc sort data=RSA_Parms2;
+    by Parameter _Imputation_;
+run;
+
+proc print data=RSA_Parms2(obs=20);
+run;
+
+proc sort data=RSA_Parms2;
+    by Parameter _Imputation_;
+run;
+
+proc mianalyze data=RSA_Parms2;
+    by Parameter;          * one pooled result per parameter label;
+    modeleffects Estimate; * variable that holds the coefficient;
+    stderr StdErr;         * variable that holds the SE;
+run;
+
+
+
+/*Time model; just replace condition by time, remove AR*/
+
+
+
+
 
 
 
@@ -1476,7 +1584,7 @@ run;
 proc glm data=hrv_long;
     by _Imputation_;
 
-    class Group REST_VS_STRESS Gender;
+    class Group(ref='0') REST_VS_STRESS(ref='0') Gender(ref='m');
 
     model PEP_msec =
         /* Main effects */
@@ -1501,7 +1609,7 @@ quit;
 ? Does variance increase with condition or time?
 ? Does variance differ by group?
 */
-
+proc print data=pep_olsresid(obs=10);run;
 
 proc sgplot data=pep_olsresid;
 	by _imputation_;
@@ -1578,17 +1686,24 @@ proc mixed data=pep_olsresid;
 run;
 
 /*3) CS*/
-proc mixed data=rsa_olsresid;
+proc mixed data=pep_olsresid;
     by _Imputation_;
     class Subject_ID Time;
-    model r_lnRSA = ;
+    model r_pep = ;
     random intercept / subject=Subject_ID;
-    repeated Time / subject=Subject_ID type=CS;
+    repeated Time / subject=Subject_ID type=cs;
     ods output FitStatistics=CS_AIC;
 run;
 
-
-
+/*4) Simple*/
+proc mixed data=pep_olsresid;
+    by _Imputation_;
+    class Subject_ID Time;
+    model r_pep = ;
+    random intercept / subject=Subject_ID;
+    repeated Time / subject=Subject_ID type=simple;
+    ods output FitStatistics=Simple_AIC;
+run;
 
 
 /*Random intercept with AR(1)*/
@@ -1600,7 +1715,7 @@ run;
 
 proc mixed data=hrv_long method=ml;
     where _Imputation_ = 10;
-    class Subject_ID Group REST_VS_STRESS Gender Time;
+    class Subject_ID Group(ref='0') REST_VS_STRESS(ref='0') Gender(ref='m') Time;
 
     model PEP_msec =
         Group
@@ -1612,7 +1727,7 @@ proc mixed data=hrv_long method=ml;
         / solution;
 
     random intercept / subject=Subject_ID;
-    repeated Time / subject=Subject_ID type=AR(1);
+    repeated Time / subject=Subject_ID type=simple;
 
     ods output FitStatistics=Fit_full
                Type3=Type3_full;
@@ -1623,7 +1738,7 @@ run;
 
 proc mixed data=hrv_long method=ml;
     where _Imputation_ = 10;
-    class Subject_ID Group REST_VS_STRESS Gender Time;
+    class Subject_ID Group(ref='0') REST_VS_STRESS(ref='0') Gender(ref='m') Time;
 
     model PEP_msec =
         Group
@@ -1635,7 +1750,7 @@ proc mixed data=hrv_long method=ml;
         / solution;
 
     random intercept / subject=Subject_ID;
-    repeated Time / subject=Subject_ID type=AR(1);
+    repeated Time / subject=Subject_ID type=simple;
 
     ods output FitStatistics=Fit_noRG;
 run;
@@ -1644,7 +1759,7 @@ run;
 /*Reduce more*/
 proc mixed data=hrv_long method=ml;
     where _Imputation_ = 10;
-    class Subject_ID Group REST_VS_STRESS Gender Time;
+    class Subject_ID Group(ref='0') REST_VS_STRESS(ref='0') Gender(ref='m') Time;
 
     model PEP_msec =
         Group
@@ -1656,7 +1771,7 @@ proc mixed data=hrv_long method=ml;
         / solution;
 
     random intercept / subject=Subject_ID;
-    repeated Time / subject=Subject_ID type=AR(1);
+    repeated Time / subject=Subject_ID type=simple;
 
     ods output FitStatistics=Fit_noRG;
 run;
@@ -1674,12 +1789,14 @@ proc sort data=hrv_long;
     by _Imputation_;
 run;
 
-/* 1. Final mixed model: lnSDNN ~ Group * REST_VS_STRESS + Gender
-      Random intercept + AR(1) */
+
+/* 1. Final mixed model: PEP_msec ~ Group * REST_VS_STRESS + Gender
+      Random intercept + Simple */
+
 /* From your PROC MIXED */
 proc mixed data=hrv_long nobound method=reml;
     by _Imputation_;
-    class Subject_ID Group REST_VS_STRESS Gender Time;
+    class Subject_ID Group(ref='0') REST_VS_STRESS(ref='0') Gender(ref='m') Time;
 
     model PEP_msec =
         Group
@@ -1687,8 +1804,8 @@ proc mixed data=hrv_long nobound method=reml;
         Group*REST_VS_STRESS
         Gender
         / solution ddfm=kr;
-    random intercept / subject=Subject_ID;
-    repeated Time / subject=Subject_ID type=AR(1);
+    random intercept  / subject=Subject_ID;
+    repeated Time / subject=Subject_ID type=simple;
 
     ods output SolutionF = PEP_SolutionF;
 run;
@@ -1733,5 +1850,426 @@ proc mianalyze data=PEP_Parms2;
     modeleffects Estimate; * variable that holds the coefficient;
     stderr StdErr;         * variable that holds the SE;
 run;
+
+
+/*Main Effects*/
+
+proc sort data=hrv_long;
+    by _Imputation_;
+run;
+
+
+/* 1. Final mixed model: PEP_msec ~ Group * REST_VS_STRESS + Gender
+      Random intercept + Simple */
+
+/* From your PROC MIXED */
+proc mixed data=hrv_long nobound method=reml;
+    by _Imputation_;
+    class Subject_ID Group(ref='0') REST_VS_STRESS(ref='0') Gender(ref='m') Time;
+
+    model PEP_msec =
+        Group
+        REST_VS_STRESS
+/*        Group*REST_VS_STRESS*/
+        Gender
+        / solution ddfm=kr;
+    random intercept  / subject=Subject_ID;
+    repeated Time / subject=Subject_ID type=simple;
+
+    ods output SolutionF = PEP_SolutionF;
+run;
+
+/* Keep only the estimable rows (no reference levels) */
+data PEP_Parms;
+    set PEP_SolutionF;
+    where StdErr ne .;  * drop rows like Group=1 with StdErr=. ;
+run;
+
+proc print data=PEP_Parms(obs=20);
+run;
+
+
+data PEP_Parms2;
+    set PEP_Parms;
+    length Parameter $40;
+
+    /* create a single label for each parameter */
+    if Effect = 'Intercept' then Parameter = 'Intercept';
+    else if Effect = 'Group' then Parameter = 'Group_high_vs_lowmed';
+    else if Effect = 'REST_VS_STRESS' then Parameter = 'Stress_vs_rest';
+/*    else if Effect = 'Group*REST_VS_STRESS' then Parameter = 'Interaction_GroupxStress';*/
+    else if Effect = 'Gender' then Parameter = 'Female_vs_male';
+
+    keep _Imputation_ Parameter Estimate StdErr;
+run;
+
+proc sort data=PEP_Parms2;
+    by Parameter _Imputation_;
+run;
+
+proc print data=PEP_Parms2(obs=20);
+run;
+
+proc sort data=PEP_Parms2;
+    by Parameter _Imputation_;
+run;
+
+proc mianalyze data=PEP_Parms2;
+    by Parameter;          * one pooled result per parameter label;
+    modeleffects Estimate; * variable that holds the coefficient;
+    stderr StdErr;         * variable that holds the SE;
+run;
+
+
+
+
+
+
+
+
+
+/*========================
+	       lnHF
+ ========================*/
+
+
+/*Following Chapter 11:
+11.3 Prelimnary mean structure*/
+
+proc sort data=hrv_long;  
+    by _Imputation_ Subject_ID Time;
+run;
+
+proc glm data=hrv_long;
+    by _Imputation_;
+
+    class Group(ref='0') REST_VS_STRESS(ref='0') Gender(ref='m');
+
+    model lnHF =
+        /* Main effects */
+        Group
+        REST_VS_STRESS
+        Gender
+
+        /* Two-way interactions */
+        Group*REST_VS_STRESS
+        Group*Gender
+        REST_VS_STRESS*Gender
+
+        / solution;
+
+    output out=lnHF_olsresid
+           r = r_lnHF;
+run;
+quit;
+
+/*11.4 preliminary r.effects */
+/*Explore Residuals to: 
+? Does variance increase with condition or time?
+? Does variance differ by group?
+*/
+proc print data=lnHF_olsresid(obs=10);run;
+
+proc sgplot data=lnHF_olsresid;
+	by _imputation_;
+    scatter x=Time y=r_lnHF / transparency=0.4;
+    loess x=Time y=r_lnHF;
+    title "OLS Residuals vs Time for lnHF";
+run;
+
+proc sgplot data=lnHF_olsresid;
+	by _imputation_;
+    vbox r_lnHF / category=REST_VS_STRESS;
+    title "lnHF Residual Distribution by Condition (Rest vs Stress)";
+run;
+
+proc sgplot data=lnHF_olsresid;
+    by _imputation_;
+    vbox r_lnHF / category=Group;
+    title "lnHF Residual Distribution by PMA Group";
+run;
+
+proc sgplot data=lnHF_olsresid;
+	by _imputation_;
+    series x=Time y=r_lnHF / group=Subject_ID transparency=0.8;
+    title "lnHF Residual Profiles by Subject";
+run;
+
+data resvar;
+    set lnHF_olsresid;
+	by _imputation_;
+    r2 = r_lnHF * r_lnHF;
+run;
+
+proc sgplot data=resvar;
+
+    scatter x=Time y=r2 / transparency=0.5;
+    loess x=Time y=r2;
+    title "lnHF Squared Residuals vs Time (Variance Diagnostics)";
+run;
+
+/*11.5 Check Residuals Covariance*/
+
+
+/*Explore residuals to see:
+? Is correlation strong between nearby time points?
+? Does correlation decay with time?
+? Is correlation stronger under stress than rest?
+? Are residuals “bunched” by subject?
+? Which covariance structure is most appropriate?*/
+
+
+/*============================DO NOT FORGET TO SAVE THE PLOTS TO USE THEM IN THE THESIS IN SHAA ALLAH==========================*/
+
+
+
+/*After seeing the plots, the candidates for the covariance structure are: AR, CS, UN, let's try*/
+/*1) UN*/
+proc mixed data=lnHF_olsresid;
+    by _Imputation_;
+    class Subject_ID Time;
+    model r_lnHF = ;
+    random intercept / subject=Subject_ID;
+    repeated Time / subject=Subject_ID type=UN;
+    ods output FitStatistics=UN_AIC;
+run;
+
+/*2) AR(1)*/
+proc mixed data=lnHF_olsresid;
+    by _Imputation_;
+    class Subject_ID Time;
+    model r_lnHF = ;
+    random intercept / subject=Subject_ID;
+    repeated Time / subject=Subject_ID type=AR(1);
+    ods output FitStatistics=AR1_AIC;
+run;
+
+/*3) CS*/
+proc mixed data=lnHF_olsresid;
+    by _Imputation_;
+    class Subject_ID Time;
+    model r_lnHF = ;
+    random intercept / subject=Subject_ID;
+    repeated Time / subject=Subject_ID type=cs;
+    ods output FitStatistics=CS_AIC;
+run;
+
+/*4) Simple*/
+proc mixed data=lnHF_olsresid;
+    by _Imputation_;
+    class Subject_ID Time;
+    model r_lnHF = ;
+    random intercept / subject=Subject_ID;
+    repeated Time / subject=Subject_ID type=simple;
+    ods output FitStatistics=Simple_AIC;
+run;
+
+
+/*AR(1) wins*/
+
+
+/*Random intercept with AR(1)*/
+/*==============================
+	Mean structure reduction
+  ==============================*/
+
+proc mixed data=hrv_long nobound method=ml;
+    where _Imputation_ = 2;
+    class Subject_ID Group(ref='0') REST_VS_STRESS(ref='0') Gender(ref='m') Time;
+
+    model lnHF =
+        Group
+        REST_VS_STRESS
+        Gender
+        Group*REST_VS_STRESS
+        Group*Gender
+        REST_VS_STRESS*Gender
+        / solution;
+
+    random intercept / subject=Subject_ID;
+    repeated Time / subject=Subject_ID type=AR(1);
+
+    ods output FitStatistics=Fit_full
+               Type3=Type3_full;
+run;
+
+
+
+
+proc mixed data=hrv_long nobound method=ml;
+    where _Imputation_ = 2;
+    class Subject_ID Group(ref='0') REST_VS_STRESS(ref='0') Gender(ref='m') Time;
+
+    model lnHF =
+        Group
+        REST_VS_STRESS
+        Gender
+        Group*REST_VS_STRESS
+/*        Group*Gender*/
+        REST_VS_STRESS*Gender
+        / solution;
+
+    random intercept / subject=Subject_ID;
+    repeated Time / subject=Subject_ID type=AR(1);
+
+    ods output FitStatistics=Fit_noRG;
+run;
+
+
+/*Reduce more (just to see)*/
+proc mixed data=hrv_long nobound method=ml;
+    where _Imputation_ = 8;
+    class Subject_ID Group(ref='0') REST_VS_STRESS(ref='0') Gender(ref='m') Time;
+
+    model lnHF =
+        Group
+        REST_VS_STRESS
+        Gender
+        Group*REST_VS_STRESS
+/*        Group*Gender*/
+/*        REST_VS_STRESS*Gender*/
+        / solution;
+
+    random intercept / subject=Subject_ID;
+    repeated Time / subject=Subject_ID type=AR(1);
+
+    ods output FitStatistics=Fit_noRG;
+run;
+
+
+/*REmoving condition*Gender does not improve the model*/
+
+
+
+
+/* 1. Final mixed model: lnHF ~ Group * REST_VS_STRESS + Gender*REST_VS_STRESS
+      Random intercept + AR(1) */
+
+
+proc mixed data=hrv_long nobound method=reml;
+    by _Imputation_;
+    class Subject_ID Group(ref='0') REST_VS_STRESS(ref='0') Gender(ref='m') Time;
+
+    model lnHF =
+        Group
+        REST_VS_STRESS
+        Gender
+		Group*REST_VS_STRESS
+        REST_VS_STRESS*Gender
+        / solution ddfm=kr; 
+    random intercept  / subject=Subject_ID;
+    repeated Time / subject=Subject_ID type=AR(1);
+
+    ods output SolutionF = lnHF_SolutionF;
+run;
+
+/* Keep only the estimable rows (no reference levels) */
+data lnHF_SolutionF;
+    set lnHF_SolutionF;
+    where StdErr ne .;  * drop rows like Group=1 with StdErr=. ;
+run;
+
+proc print data=lnHF_SolutionF(obs=20);
+run;
+
+
+data lnHF_SolutionF2;
+    set lnHF_SolutionF;
+    length Parameter $40;
+
+    /* create a single label for each parameter */
+    if Effect = 'Intercept' then Parameter = 'Intercept';
+    else if Effect = 'Group' then Parameter = 'Group_high_vs_lowmed';
+    else if Effect = 'REST_VS_STRESS' then Parameter = 'Stress_vs_rest';
+    else if Effect = 'Group*REST_VS_STRESS' then Parameter = 'Interaction_GroupxStress';
+	else if Effect = 'REST_VS_STRES*Gender' then Parameter = 'Interaction_StressxGender';
+    else if Effect = 'Gender' then Parameter = 'Female_vs_male';
+
+    keep _Imputation_ Parameter Estimate StdErr;
+run;
+
+proc sort data=lnHF_SolutionF2;
+    by Parameter _Imputation_;
+run;
+
+proc print data=lnHF_SolutionF2(firstobs=20 obs=40);
+run;
+
+proc sort data=lnHF_SolutionF2;
+    by Parameter _Imputation_;
+run;
+
+proc mianalyze data=lnHF_SolutionF2;
+    by Parameter;          * one pooled result per parameter label;
+    modeleffects Estimate; * variable that holds the coefficient;
+    stderr StdErr;         * variable that holds the SE;
+run;
+
+
+
+/*Removing stressGroup*/
+
+proc mixed data=hrv_long nobound method=reml;
+    by _Imputation_;
+    class Subject_ID Group(ref='0') REST_VS_STRESS(ref='0') Gender(ref='m') Time;
+
+    model lnHF =
+        Group
+        REST_VS_STRESS
+        Gender
+/*		Group*REST_VS_STRESS*/
+        REST_VS_STRESS*Gender
+        / solution ddfm=kr;
+    random intercept / subject=Subject_ID;
+    repeated Time / subject=Subject_ID type=AR(1);
+
+    ods output SolutionF = lnHF_SolutionF1;
+run;
+
+
+data lnHF_SolutionF1;
+    set lnHF_SolutionF1;
+    where StdErr ne .;  * drop rows like Group=1 with StdErr=. ;
+run;
+
+proc print data=lnHF_SolutionF1(obs=20);
+run;
+
+
+data lnHF_SolutionF21;
+    set lnHF_SolutionF1;
+    length Parameter $40;
+
+    /* create a single label for each parameter */
+    if Effect = 'Intercept' then Parameter = 'Intercept';
+    else if Effect = 'Group' then Parameter = 'Group_high_vs_lowmed';
+    else if Effect = 'REST_VS_STRESS' then Parameter = 'Stress_vs_rest';
+/*    else if Effect = 'Group*REST_VS_STRESS' then Parameter = 'Interaction_GroupxStress';*/
+	else if Effect = 'REST_VS_STRES*Gender' then Parameter = 'Interaction_StressxGender';
+    else if Effect = 'Gender' then Parameter = 'Female_vs_male';
+
+    keep _Imputation_ Parameter Estimate StdErr;
+run;
+
+proc sort data=lnHF_SolutionF21;
+    by Parameter _Imputation_;
+run;
+
+proc print data=lnHF_SolutionF21(firstobs=20 obs=40);
+run;
+
+proc sort data=lnHF_SolutionF21;
+    by Parameter _Imputation_;
+run;
+
+proc mianalyze data=lnHF_SolutionF21;
+    by Parameter;          * one pooled result per parameter label;
+    modeleffects Estimate; * variable that holds the coefficient;
+    stderr StdErr;         * variable that holds the SE;
+run;
+
+
+
+
 
 
