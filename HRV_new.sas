@@ -1,4 +1,4 @@
-/*==============================================================
+ 	/*==============================================================
 STEP 1 — Prepare clean pre-imputation HRV dataset
 ==============================================================*/
 
@@ -1348,8 +1348,8 @@ proc mixed data=hrv_long method=ml;
         REST_VS_STRESS
         Gender
         Group*REST_VS_STRESS
-        Group*Gender
-        /* REST_VS_STRESS*Gender removed */
+/*        Group*Gender*/
+         REST_VS_STRESS*Gender
         / solution;
 
     random intercept / subject=Subject_ID;
@@ -1925,6 +1925,11 @@ run;
 
 
 
+proc import datafile='C:/Users/Ahmed/OneDrive/Documents/Masters/Second_Year/Master Thesis Data Science/Prenatal stress study/data/HRV/hrv_fcs_imputed_Long.xlsx'
+dbms=xlsx
+out=work.hrv_long
+replace;
+run;
 
 
 
@@ -2137,7 +2142,7 @@ proc mixed data=hrv_long nobound method=ml;
 run;
 
 
-/*REmoving condition*Gender does not improve the model*/
+/*Removing condition*Gender does not improve the model*/
 
 
 
@@ -2207,7 +2212,7 @@ run;
 
 
 
-/*Removing stressGroup*/
+/*Removing stress*Group*/
 
 proc mixed data=hrv_long nobound method=reml;
     by _Imputation_;
@@ -2267,6 +2272,154 @@ proc mianalyze data=lnHF_SolutionF21;
     modeleffects Estimate; * variable that holds the coefficient;
     stderr StdErr;         * variable that holds the SE;
 run;
+
+
+
+
+
+
+
+
+/*========================
+	       lnLF
+ ========================*/
+
+
+/*Following Chapter 11:
+11.3 Prelimnary mean structure*/
+
+proc sort data=hrv_long;  
+    by _Imputation_ Subject_ID Time;
+run;
+
+proc glm data=hrv_long;
+    by _Imputation_;
+
+    class Group(ref='0') REST_VS_STRESS(ref='0') Gender(ref='m');
+
+    model lnLF =
+        /* Main effects */
+        Group
+        REST_VS_STRESS
+        Gender
+
+        /* Two-way interactions */
+        Group*REST_VS_STRESS
+        Group*Gender
+        REST_VS_STRESS*Gender
+
+        / solution;
+
+    output out=lnLF_olsresid
+           r = r_lnLF;
+run;
+quit;
+
+/*11.4 preliminary r.effects */
+/*Explore Residuals to: 
+? Does variance increase with condition or time?
+? Does variance differ by group?
+*/
+proc print data=lnLF_olsresid(obs=10);run;
+
+proc sgplot data=lnLF_olsresid;
+	by _imputation_;
+    scatter x=Time y=r_lnLF / transparency=0.4;
+    loess x=Time y=r_lnLF;
+    title "OLS Residuals vs Time for lnLF";
+run;
+
+proc sgplot data=lnLF_olsresid;
+	by _imputation_;
+    vbox r_lnLF / category=REST_VS_STRESS;
+    title "lnLF Residual Distribution by Condition (Rest vs Stress)";
+run;
+
+proc sgplot data=lnLF_olsresid;
+    by _imputation_;
+    vbox r_lnLF / category=Group;
+    title "lnLF Residual Distribution by PMA Group";
+run;
+
+proc sgplot data=lnLF_olsresid;
+	by _imputation_;
+    series x=Time y=r_lnLF / group=Subject_ID transparency=0.8;
+    title "lnLF Residual Profiles by Subject";
+run;
+
+data resvar;
+    set lnLF_olsresid;
+	by _imputation_;
+    r2 = r_lnLF * r_lnLF;
+run;
+
+proc sgplot data=resvar;
+    scatter x=Time y=r2 / transparency=0.5;
+    loess x=Time y=r2;
+    title "lnLF Squared Residuals vs Time (Variance Diagnostics)";
+run;
+
+/*11.5 Check Residuals Covariance*/
+
+
+/*Explore residuals to see:
+? Is correlation strong between nearby time points?
+? Does correlation decay with time?
+? Is correlation stronger under stress than rest?
+? Are residuals “bunched” by subject?
+? Which covariance structure is most appropriate?*/
+
+
+/*============================DO NOT FORGET TO SAVE THE PLOTS TO USE THEM IN THE THESIS IN SHAA ALLAH==========================*/
+
+
+
+/*After seeing the plots, the candidates for the covariance structure are: AR, CS, UN, let's try*/
+/*1) UN*/
+proc mixed data=lnLF_olsresid;
+    by _Imputation_;
+    class Subject_ID Time;
+    model r_lnLF = ;
+    random intercept / subject=Subject_ID;
+    repeated Time / subject=Subject_ID type=UN;
+    ods output FitStatistics=UN_AIC;
+run;
+
+/*2) AR(1)*/
+proc mixed data=lnLF_olsresid;
+    by _Imputation_;
+    class Subject_ID Time;
+    model r_lnLF = ;
+    random intercept / subject=Subject_ID;
+    repeated Time / subject=Subject_ID type=AR(1);
+    ods output FitStatistics=AR1_AIC;
+run;
+
+/*3) CS*/
+proc mixed data=lnLF_olsresid;
+    by _Imputation_;
+    class Subject_ID Time;
+    model r_lnLF = ;
+    random intercept / subject=Subject_ID;
+    repeated Time / subject=Subject_ID type=cs;
+    ods output FitStatistics=CS_AIC;
+run;
+
+/*4) Simple*/
+proc mixed data=lnLF_olsresid;
+    by _Imputation_;
+    class Subject_ID Time;
+    model r_lnLF = ;
+    random intercept / subject=Subject_ID;
+    repeated Time / subject=Subject_ID type=simple;
+    ods output FitStatistics=Simple_AIC;
+run;
+
+
+
+
+
+
 
 
 
