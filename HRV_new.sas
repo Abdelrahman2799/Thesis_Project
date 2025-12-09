@@ -10,7 +10,7 @@ proc import datafile="C:\Users\Ahmed\OneDrive\Documents\Masters\Second_Year\Mast
 run;
 
 /*--------------------------------------------------------------
-1. Drop all log10 variables (not needed)
+1. Drop all log10 variables (not needed since you have already ln ones).
 --------------------------------------------------------------*/
 data hrv_clean_base;
     set hrv_wide;
@@ -69,6 +69,15 @@ proc means data=hrv_pre_impute n min mean max;  /*check missingness at each time
 		PEP_msec_T1-PEP_msec_T6;
     title "QC: Check corrected log transformations (RSA, SCL) + other log transformations + PEP";
 run;
+proc sort data=hrv_pre_impute; by Subject_ID; run;
+proc print data=hrv_pre_impute(obs=20); run;
+
+proc export data=hrv_pre_impute
+  outfile='C:\Users\Ahmed\OneDrive\Documents\Masters\Second_Year\Master Thesis Data Science\Prenatal stress study\data\HRV\HRV_pre_impute_wide.xlsx'
+  dbms=xlsx
+  replace;
+  sheet="HRV_pre_impute_wide";
+run;
 
 
 
@@ -87,7 +96,7 @@ ods excel file="C:\Users\Ahmed\OneDrive\Documents\Masters\Second_Year\Master The
 proc mi data=hrv_pre_impute
         out=hrv_imputed_ln
         seed=12345
-        nimpute=10;    /* <-- removed ROUND= on proc line to silence CLASS warning */
+        nimpute=10;    
   class Gender Group;
 
   /* Global PMM */
@@ -95,7 +104,7 @@ proc mi data=hrv_pre_impute
 
   /* --- Tailored fixes --- */
   /* lnRMSSD/SDNN/RSA T5: shrink predictors to high-coverage only */
-  fcs regpmm( lnRMSSD_msec_T5 = Gender Group lnRMSSD_msec_T4 lnRMSSD_msec_T6);
+   fcs regpmm( lnRMSSD_msec_T5 = Gender Group lnRMSSD_msec_T4 lnRMSSD_msec_T6);
    fcs regpmm( lnSDNN_msec_T5 = Gender Group lnSDNN_msec_T4 lnRMSSD_msec_T6);
    fcs regpmm( lnRSA0_msec_T5 = Gender Group lnRSA0_msec_T4 lnRSA0_msec_T6);
 
@@ -180,6 +189,10 @@ proc means data=imputed_data n mean std min max skew kurt;
   title "Descriptive statistics for PEP (Imputation 1)";
 run;
 
+proc sort data=imputed_data; by Subject_ID _imputation_; run;
+proc print data=imputed_data(obs=20); run;
+
+
 
 /*==============================================================
 Reshape imputed wide data to long format (LFHF at T1,T3,T4,T6)
@@ -206,7 +219,7 @@ data hrv_long_imputed;
 
   array lnSCL_a[2]    lnAverage_SCL_uS_T1-lnAverage_SCL_uS_T2;
 
-  /* If names differ, adjust these: */
+
   retain lnHF_ms_T1 lnHF_ms_T3 lnHF_ms_T4 lnHF_ms_T6;
   retain lnLF_ms_T1 lnLF_ms_T3 lnLF_ms_T4 lnLF_ms_T6;
   retain lnLFHF_T1  lnLFHF_T3  lnLFHF_T4  lnLFHF_T6;
@@ -241,7 +254,7 @@ data hrv_long_imputed;
     label REST_VS_STRESS = "Condition: 1=Stress (T2–T5), 0=Rest (T1,T6)";
     format REST_VS_STRESS condition01_.;
 
-    /* 3-level phase (optional) */
+    /* 3-level phase (probably not gonna use it) */
     length PHASE $9;
     if Time=1 then PHASE='Baseline';
     else if Time in (2,3,4,5) then PHASE='Stress';
@@ -320,11 +333,9 @@ proc print data=hrv_long(obs=20);run;
  =======================================================*/
 
 /*-----------------------------------------------------------
-  Semi-variogram for one outcome and one imputation --> Helps in deciding for the 3 components of variance.
-  Based on Molenberghs & Verbeke, Ch. 7 (slide 153)
+  Semi-variogram to decide for the 3 variance components. check Ch. 7
 
-  Remove your systematic trend, use residuals to explore correlation. 
-  ex: given that the total variability is constant, u can assume CS if correlaton is the same.
+  Remove the systematic trend, use residuals to explore correlation. 
 -----------------------------------------------------------*/
 
 %macro semivariogram(ds      = hrv_long,
@@ -356,8 +367,8 @@ run;
 /* 4. Semi-variances within same subject: estimate ?(u) */
 data _variogram;
   set _pairs;
-  if y1 = y2;                             /* within-subject pairs */
-  vario = (v1 - v2)**2 / 2;               /* semi-variance */
+  if y1 = y2  /* within-subject pairs */
+  vario = (v1 - v2)**2 / 2;  /* semi-variance */
 run;
 
 /* 5. Semi-variances between subjects to estimate total variance */
@@ -464,6 +475,11 @@ proc glm data=hrv_long;
 run;
 quit;
 
+
+/*Even if the matrix is singular, OLS residuals are still valid. SAS computes residuals with a generalized inverse.
+I am NOT interpreting the estimates, i ONLY need the residuals, so singularity should not be a problem at this stage.*/
+
+
 /*11.4 preliminary r.effects */
 /*Explore Residuals to: 
 ? Does variance increase with condition or time?
@@ -520,9 +536,7 @@ run;
 ? Is correlation strong between nearby time points?
 ? Does correlation decay with time?
 ? Is correlation stronger under stress than rest?
-? Are residuals “bunched” by subject?
 ? Which covariance structure is most appropriate?*/
-
 
 
 
@@ -883,7 +897,6 @@ run;
 ? Is correlation strong between nearby time points?
 ? Does correlation decay with time?
 ? Is correlation stronger under stress than rest?
-? Are residuals “bunched” by subject?
 ? Which covariance structure is most appropriate?*/
 
 
@@ -2416,6 +2429,1196 @@ proc mixed data=lnLF_olsresid;
 run;
 
 
+/*AR(1) wins*/
+
+
+/*Random intercept with AR(1)*/
+/*==============================
+	Mean structure reduction
+  ==============================*/
+
+proc mixed data=hrv_long nobound method=ml;
+    where _Imputation_ = 8;
+    class Subject_ID Group(ref='0') REST_VS_STRESS(ref='0') Gender(ref='m') Time;
+
+    model lnLF =
+        Group
+        REST_VS_STRESS
+        Gender
+        Group*REST_VS_STRESS
+        Group*Gender
+        REST_VS_STRESS*Gender
+        / solution;
+
+    random intercept / subject=Subject_ID;
+    repeated Time / subject=Subject_ID type=AR(1);
+
+    ods output FitStatistics=Fit_full
+               Type3=Type3_full;
+run;
+
+/*REST_VS_STRESSGroup is the most not significant term, but keep it for now, remove the second most non significant term*/
+
+
+proc mixed data=hrv_long nobound method=ml;
+    where _Imputation_ = 8;
+    class Subject_ID Group(ref='0') REST_VS_STRESS(ref='0') Gender(ref='m') Time;
+
+    model lnLF =
+        Group
+        REST_VS_STRESS
+        Gender
+        Group*REST_VS_STRESS
+        Group*Gender
+/*        REST_VS_STRESS*Gender*/
+        / solution;
+
+    random intercept / subject=Subject_ID;
+    repeated Time / subject=Subject_ID type=AR(1);
+
+    ods output FitStatistics=Fit_noRG;
+run;
+
+/*Group*Gender is the most non significant term, remove the second most non significant interaction term (remember: 0.1 for interaction)*/
+
+/*Reduce more*/
+proc mixed data=hrv_long nobound method=ml;
+    where _Imputation_ = 8;
+    class Subject_ID Group(ref='0') REST_VS_STRESS(ref='0') Gender(ref='m') Time;
+
+    model lnLF =
+        Group
+        REST_VS_STRESS
+        Gender
+        Group*REST_VS_STRESS
+/*        Group*Gender*/
+/*        REST_VS_STRESS*Gender*/
+        / solution;
+
+    random intercept / subject=Subject_ID;
+    repeated Time / subject=Subject_ID type=AR(1);
+
+    ods output FitStatistics=Fit_noRG;
+run;
+
+
+/*Removing condition*Gender does not improve the model*/
+
+
+
+
+/* 1. Final mixed model: lnLF ~ Group * REST_VS_STRESS + Gender
+      Random intercept + AR(1) */
+
+
+proc mixed data=hrv_long nobound method=reml;
+    by _Imputation_;
+    class Subject_ID Group(ref='0') REST_VS_STRESS(ref='0') Gender(ref='m') Time;
+
+    model lnLF =
+        Group
+        REST_VS_STRESS
+        Gender
+		Group*REST_VS_STRESS
+        / solution ddfm=kr; 
+    random intercept  / subject=Subject_ID;
+    repeated Time / subject=Subject_ID type=AR(1);
+
+    ods output SolutionF = lnLF_SolutionF;
+run;
+
+/* Keep only the estimable rows (no reference levels) */
+data lnLF_SolutionF;
+    set lnLF_SolutionF;
+    where StdErr ne .;  * drop rows like Group=1 with StdErr=. ;
+run;
+
+proc print data=lnLF_SolutionF(obs=20);
+run;
+
+
+data lnLF_SolutionF2;
+    set lnLF_SolutionF;
+    length Parameter $40;
+
+    /* create a single label for each parameter */
+    if Effect = 'Intercept' then Parameter = 'Intercept';
+    else if Effect = 'Group' then Parameter = 'Group_high_vs_lowmed';
+    else if Effect = 'REST_VS_STRESS' then Parameter = 'Stress_vs_rest';
+    else if Effect = 'Group*REST_VS_STRESS' then Parameter = 'Interaction_GroupxStress';
+/*	else if Effect = 'REST_VS_STRES*Gender' then Parameter = 'Interaction_StressxGender';*/
+    else if Effect = 'Gender' then Parameter = 'Female_vs_male';
+
+    keep _Imputation_ Parameter Estimate StdErr;
+run;
+
+proc sort data=lnLF_SolutionF2;
+    by Parameter _Imputation_;
+run;
+
+proc print data=lnLF_SolutionF2(firstobs=20 obs=40);
+run;
+
+proc sort data=lnLF_SolutionF2;
+    by Parameter _Imputation_;
+run;
+
+proc mianalyze data=lnLF_SolutionF2;
+    by Parameter;          * one pooled result per parameter label;
+    modeleffects Estimate; * variable that holds the coefficient;
+    stderr StdErr;         * variable that holds the SE;
+run;
+
+
+
+/*=====================================================================*/
+
+
+/*Main effects:  lnLF ~ Group * REST_VS_STRESS + Gender
+ Random intercept + AR(1) */
+
+
+proc mixed data=hrv_long nobound method=reml;
+    by _Imputation_;
+    class Subject_ID Group(ref='0') REST_VS_STRESS(ref='0') Gender(ref='m') Time;
+
+    model lnLF =
+        Group
+        REST_VS_STRESS
+        Gender
+        / solution ddfm=kr; 
+    random intercept  / subject=Subject_ID;
+    repeated Time / subject=Subject_ID type=AR(1);
+
+    ods output SolutionF = lnLF_Solution_main;
+run;
+
+/* Keep only the estimable rows (no reference levels) */
+data lnLF_Solution_main;
+    set lnLF_Solution_main;
+    where StdErr ne .;  * drop rows like Group=1 with StdErr=. ;
+run;
+
+proc print data=lnLF_Solution_main(obs=20);
+run;
+
+
+data lnLF_Solution_main2;
+    set lnLF_Solution_main;
+    length Parameter $40;
+
+    /* create a single label for each parameter */
+    if Effect = 'Intercept' then Parameter = 'Intercept';
+    else if Effect = 'Group' then Parameter = 'Group_high_vs_lowmed';
+    else if Effect = 'REST_VS_STRESS' then Parameter = 'Stress_vs_rest';
+/*    else if Effect = 'Group*REST_VS_STRESS' then Parameter = 'Interaction_GroupxStress';*/
+/*	else if Effect = 'Group*Gender' then Parameter = 'Interaction_GroupxGender';*/
+    else if Effect = 'Gender' then Parameter = 'Female_vs_male';
+
+    keep _Imputation_ Parameter Estimate StdErr;
+run;
+
+proc sort data=lnLF_Solution_main2;
+    by Parameter _Imputation_;
+run;
+
+proc print data=lnLF_Solution_main2(firstobs=20 obs=40);
+run;
+
+proc sort data=lnLF_Solution_main2;
+    by Parameter _Imputation_;
+run;
+
+proc mianalyze data=lnLF_Solution_main2;
+    by Parameter;          * one pooled result per parameter label;
+    modeleffects Estimate; * variable that holds the coefficient;
+    stderr StdErr;         * variable that holds the SE;
+run;
+
+
+
+
+
+
+proc import datafile='C:/Users/Ahmed/OneDrive/Documents/Masters/Second_Year/Master Thesis Data Science/Prenatal stress study/data/HRV/hrv_fcs_imputed_Long.xlsx'
+dbms=xlsx
+out=work.hrv_long
+replace;
+run;
+/*==================
+	     LFHF
+  ==================*/
+
+proc sort data=hrv_long;  
+    by _Imputation_ Subject_ID Time;
+run;
+
+proc glm data=hrv_long;
+    by _Imputation_;
+
+    class Group(ref='0') REST_VS_STRESS(ref='0') Gender(ref='m');
+
+    model lnLFHF =
+        /* Main effects */
+        Group
+        REST_VS_STRESS
+        Gender
+
+        /* Two-way interactions */
+        Group*REST_VS_STRESS
+        Group*Gender
+        REST_VS_STRESS*Gender
+
+        / solution;
+
+    output out=lnLFHF_olsresid
+           r = r_lnLFHF;
+run;
+quit;
+
+/*11.4 preliminary r.effects */
+/*Explore Residuals to: 
+? Does variance increase with condition or time?
+? Does variance differ by group?
+*/
+proc print data=lnLFHF_olsresid(obs=10);run;
+
+proc sgplot data=lnLFHF_olsresid;
+	by _imputation_;
+    scatter x=Time y=r_lnLFHF / transparency=0.4;
+    loess x=Time y=r_lnLFHF;
+    title "OLS Residuals vs Time for lnLFHF";
+run;
+
+proc sgplot data=lnLFHF_olsresid;
+	by _imputation_;
+    vbox r_lnLFHF / category=REST_VS_STRESS;
+    title "lnLFHF Residual Distribution by Condition (Rest vs Stress)";
+run;
+
+proc sgplot data=lnLFHF_olsresid;
+    by _imputation_;
+    vbox r_lnLFHF / category=Group;
+    title "lnLFHF Residual Distribution by PMA Group";
+run;
+
+proc sgplot data=lnLFHF_olsresid;
+	by _imputation_;
+    series x=Time y=r_lnLFHF / group=Subject_ID transparency=0.8;
+    title "lnLFHF Residual Profiles by Subject";
+run;
+
+data resvar;
+    set lnLFHF_olsresid;
+	by _imputation_;
+    r2 = r_lnLFHF * r_lnLFHF;
+run;
+
+proc sgplot data=resvar;
+    scatter x=Time y=r2 / transparency=0.5;
+    loess x=Time y=r2;
+    title "lnLFHF Squared Residuals vs Time (Variance Diagnostics)";
+run;
+
+/*11.5 Check Residuals Covariance*/
+
+
+/*Explore residuals to see:
+? Is correlation strong between nearby time points?
+? Does correlation decay with time?
+? Is correlation stronger under stress than rest?
+? Are residuals “bunched” by subject?
+? Which covariance structure is most appropriate?*/
+
+
+/*============================DO NOT FORGET TO SAVE THE PLOTS TO USE THEM IN THE THESIS IN SHAA ALLAH==========================*/
+
+
+
+/*After seeing the plots, the candidates for the covariance structure are: AR, CS, UN, let's try*/
+/*1) UN*/
+proc mixed data=lnLFHF_olsresid;
+    by _Imputation_;
+    class Subject_ID Time;
+    model r_lnLFHF = ;
+    random intercept / subject=Subject_ID;
+    repeated Time / subject=Subject_ID type=UN;
+    ods output FitStatistics=UN_AIC;
+run;
+
+/*2) AR(1)*/
+proc mixed data=lnLFHF_olsresid;
+    by _Imputation_;
+    class Subject_ID Time;
+    model r_lnLFHF = ;
+    random intercept / subject=Subject_ID;
+    repeated Time / subject=Subject_ID type=AR(1);
+    ods output FitStatistics=AR1_AIC;
+run;
+
+/*3) CS*/
+proc mixed data=lnLFHF_olsresid;
+    by _Imputation_;
+    class Subject_ID Time;
+    model r_lnLFHF = ;
+    random intercept / subject=Subject_ID;
+    repeated Time / subject=Subject_ID type=cs;
+    ods output FitStatistics=CS_AIC;
+run;
+
+/*4) Simple*/
+proc mixed data=lnLFHF_olsresid;
+    by _Imputation_;
+    class Subject_ID Time;
+    model r_lnLFHF = ;
+    random intercept / subject=Subject_ID;
+    repeated Time / subject=Subject_ID type=simple;
+    ods output FitStatistics=Simple_AIC;
+run;
+
+/**/
+
+/*AR(1) wins*/
+
+
+/*Random intercept with AR(1)*/
+/*==============================
+	Mean structure reduction
+  ==============================*/
+
+proc mixed data=hrv_long nobound method=ml;
+    where _Imputation_ = 5;
+    class Subject_ID Group(ref='0') REST_VS_STRESS(ref='0') Gender(ref='m') Time;
+
+    model lnLFHF =
+        Group
+        REST_VS_STRESS
+        Gender
+        Group*REST_VS_STRESS
+        Group*Gender
+        REST_VS_STRESS*Gender
+        / solution;
+
+    random intercept / subject=Subject_ID;
+    repeated Time / subject=Subject_ID type=AR(1);
+
+    ods output FitStatistics=Fit_full
+               Type3=Type3_full;
+run;
+
+/*Group*Gender is highly not significant, drop it*/
+
+proc mixed data=hrv_long nobound method=ml;
+    where _Imputation_ = 5;
+    class Subject_ID Group(ref='0') REST_VS_STRESS(ref='0') Gender(ref='m') Time;
+
+    model lnLFHF =
+        Group
+        REST_VS_STRESS
+        Gender
+        Group*REST_VS_STRESS
+/*        Group*Gender*/
+        REST_VS_STRESS*Gender
+        / solution;
+
+    random intercept / subject=Subject_ID;
+    repeated Time / subject=Subject_ID type=AR(1);
+
+    ods output FitStatistics=Fit_noRG;
+run;
+
+
+/*REST_VS_STRESS*Gender is highly significant, just for trying, reduce more*/
+proc mixed data=hrv_long nobound method=ml;
+    where _Imputation_ = 5;
+    class Subject_ID Group(ref='0') REST_VS_STRESS(ref='0') Gender(ref='m') Time;
+
+    model lnLFHF =
+        Group
+        REST_VS_STRESS
+        Gender
+        Group*REST_VS_STRESS
+/*        Group*Gender*/
+/*        REST_VS_STRESS*Gender*/
+        / solution;
+
+    random intercept / subject=Subject_ID;
+    repeated Time / subject=Subject_ID type=AR(1);
+
+    ods output FitStatistics=Fit_noRG;
+run;
+
+/*The test is significant, so the model with rest_vs_Stress*gender is important*/
+
+
+/*==========Final model============*/
+
+/* 1. Final mixed model: lnLFHF ~ Group * REST_VS_STRESS + REST_VS_STRESS * Gender
+      Random intercept + AR(1) */
+
+
+proc mixed data=hrv_long nobound method=reml;
+    by _Imputation_;
+    class Subject_ID Group(ref='0') REST_VS_STRESS(ref='0') Gender(ref='m') Time;
+
+    model lnLFHF =
+        Group
+        REST_VS_STRESS
+        Gender
+		Group*REST_VS_STRESS
+		REST_VS_STRESS*Gender
+        / solution ddfm=kr; 
+    random intercept  / subject=Subject_ID;
+    repeated Time / subject=Subject_ID type=AR(1);
+
+    ods output SolutionF = lnLFHF_SolutionF;
+run;
+
+/* Keep only the estimable rows (no reference levels) */
+data lnLFHF_SolutionF;
+    set lnLFHF_SolutionF;
+    where StdErr ne .;  * drop rows like Group=1 with StdErr=. ;
+run;
+
+proc print data=lnLFHF_SolutionF(obs=20);
+run;
+
+
+data lnLFHF_SolutionF2;
+    set lnLFHF_SolutionF;
+    length Parameter $40;
+
+    /* create a single label for each parameter */
+    if Effect = 'Intercept' then Parameter = 'Intercept';
+    else if Effect = 'Group' then Parameter = 'Group_high_vs_lowmed';
+    else if Effect = 'REST_VS_STRESS' then Parameter = 'Stress_vs_rest';
+    else if Effect = 'Group*REST_VS_STRESS' then Parameter = 'Interaction_GroupxStress';
+	else if Effect = 'REST_VS_STRES*Gender' then Parameter = 'Interaction_StressxGender';
+    else if Effect = 'Gender' then Parameter = 'Female_vs_male';
+
+    keep _Imputation_ Parameter Estimate StdErr;
+run;
+
+proc sort data=lnLFHF_SolutionF2;
+    by Parameter _Imputation_;
+run;
+
+proc print data=lnLFHF_SolutionF2(firstobs=20 obs=40);
+run;
+
+proc sort data=lnLFHF_SolutionF2;
+    by Parameter _Imputation_;
+run;
+
+proc mianalyze data=lnLFHF_SolutionF2;
+    by Parameter;          * one pooled result per parameter label;
+    modeleffects Estimate; * variable that holds the coefficient;
+    stderr StdErr;         * variable that holds the SE;
+run;
+
+
+
+
+
+
+/*Drop group*stress, keep stress*gender as it is highly significant
+
+				lnLFHF ~ Group + rest_vs_Stress*Gender*/
+
+
+proc mixed data=hrv_long nobound method=reml;
+    by _Imputation_;
+    class Subject_ID Group(ref='0') REST_VS_STRESS(ref='0') Gender(ref='m') Time;
+
+    model lnLFHF =
+        Group
+        REST_VS_STRESS
+        Gender
+/*		Group*REST_VS_STRESS*/
+		REST_VS_STRESS*Gender
+        / solution ddfm=kr; 
+    random intercept  / subject=Subject_ID;
+    repeated Time / subject=Subject_ID type=AR(1);
+
+    ods output SolutionF = lnLFHF_SolutionF_;
+run;
+
+/* Keep only the estimable rows (no reference levels) */
+data lnLFHF_SolutionF_;
+    set lnLFHF_SolutionF_;
+    where StdErr ne .;  * drop rows like Group=1 with StdErr=. ;
+run;
+
+proc print data=lnLFHF_SolutionF_(obs=20);
+run;
+
+
+data lnLFHF_SolutionF_2;
+    set lnLFHF_SolutionF_;
+    length Parameter $40;
+
+    /* create a single label for each parameter */
+    if Effect = 'Intercept' then Parameter = 'Intercept';
+    else if Effect = 'Group' then Parameter = 'Group_high_vs_lowmed';
+    else if Effect = 'REST_VS_STRESS' then Parameter = 'Stress_vs_rest';
+/*    else if Effect = 'Group*REST_VS_STRESS' then Parameter = 'Interaction_GroupxStress';*/
+	else if Effect = 'REST_VS_STRES*Gender' then Parameter = 'Interaction_StressxGender';
+    else if Effect = 'Gender' then Parameter = 'Female_vs_male';
+
+    keep _Imputation_ Parameter Estimate StdErr;
+run;
+
+proc sort data=lnLFHF_SolutionF_2;
+    by Parameter _Imputation_;
+run;
+
+proc print data=lnLFHF_SolutionF_2(firstobs=20 obs=40);
+run;
+
+proc sort data=lnLFHF_SolutionF_2;
+    by Parameter _Imputation_;
+run;
+
+proc mianalyze data=lnLFHF_SolutionF_2;
+    by Parameter;          * one pooled result per parameter label;
+    modeleffects Estimate; * variable that holds the coefficient;
+    stderr StdErr;         * variable that holds the SE;
+run;
+
+
+
+
+
+
+/*lnSCL*/
+
+/*The questions that can be answered for lnSCL:
+1- Is there group effect? */
+
+proc import datafile='C:/Users/Ahmed/OneDrive/Documents/Masters/Second_Year/Master Thesis Data Science/Prenatal stress study/data/HRV/hrv_fcs_imputed_Long.xlsx'
+dbms=xlsx
+out=work.hrv_long
+replace;
+run;
+
+
+proc glm data=hrv_long;
+    where _Imputation_ = 1;
+
+    class Group(ref='0') Gender(ref='m');
+
+    model lnSCL =
+        /* Main effects */
+        Group
+        Gender
+
+        /* Two-way interactions */
+        Group*Gender
+
+        / solution;
+
+    output out=lnSCL_olsresid
+           r = r_lnSCL;
+run;
+quit;
+
+/*11.4 preliminary r.effects */
+/*Explore Residuals to: 
+? Does variance differ by group?
+*/
+proc print data=lnSCL_olsresid(obs=10);run;
+
+proc sgplot data=lnSCL_olsresid;
+    scatter x=Time y=r_lnSCL / transparency=0.4;
+    loess x=Time y=r_lnSCL;
+	xaxis min=1 max=2;
+    title "OLS Residuals vs Time for lnSCL";
+run;
+
+proc sgplot data=lnSCL_olsresid;
+    vbox r_lnSCL / category=Group;
+    title "lnSCL Residual Distribution by PMA Group";
+run;
+
+proc sgplot data=lnSCL_olsresid;
+    series x=Time y=r_lnSCL / group=Subject_ID transparency=0.8;
+	xaxis min=1 max=2;
+    title "lnSCL Residual Profiles by Subject";
+run;
+
+data resvar;
+    set lnSCL_olsresid;
+    r2 = r_lnSCL * r_lnSCL;
+run;
+
+proc sgplot data=resvar;
+    scatter x=Time y=r2 / transparency=0.5;
+    loess x=Time y=r2;
+	xaxis min=1 max=2;
+    title "lnSCL Squared Residuals vs Time (Variance Diagnostics)";
+run;
+
+/*11.5 Check Residuals Covariance*/
+
+
+/*Explore residuals to see:
+? Is correlation strong between nearby time points?
+? Does correlation decay with time?
+? Is correlation stronger under stress than rest?
+? Are residuals “bunched” by subject?
+? Which covariance structure is most appropriate?*/
+
+
+/*============================DO NOT FORGET TO SAVE THE PLOTS TO USE THEM IN THE THESIS IN SHAA ALLAH==========================*/
+
+/*Simple*/
+proc mixed data=lnSCL_olsresid;
+    class Subject_ID Time;
+    model r_lnSCL = ;
+    random intercept / subject=Subject_ID;
+    repeated Time / subject=Subject_ID type=simple;
+    ods output FitStatistics=Simple_AIC;
+run;
+
+
+/*Choose mean structure*/
+
+proc mixed data=hrv_long nobound method=ML;
+	where _imputation_ = 1;
+    class Subject_ID Group(ref='0') Gender(ref='m');
+    model lnSCL = Group*Gender / solution;
+    random intercept / subject=Subject_ID;
+run;
+
+proc mixed data=hrv_long nobound method=ML;
+	where _imputation_ = 1;
+    class Subject_ID Group(ref='0') Gender(ref='m');
+    model lnSCL = Group Gender / solution;
+    random intercept / subject=Subject_ID;
+run;
+
+
+
+/*Final model: lnSCL ~ Group + Gender*/
+proc mixed data=hrv_long nobound method=REML;
+	where _imputation_ = 5;
+    class Subject_ID Group(ref='0') Gender(ref='m');
+    model lnSCL = Group Gender / solution;
+    random intercept / subject=Subject_ID;
+run;
+
+
+
+/*=========================
+		   MNAR
+ ==========================*/
+
+/*Merge pre-imputing wide data with the imputed (wide) data to be able to identify the originally missing observations*/
+proc import datafile='C:\Users\Ahmed\OneDrive\Documents\Masters\Second_Year\Master Thesis Data Science\Prenatal stress study\data\HRV\hrv_imputed_Fcs.xlsx'
+dbms=xlsx                                   
+out=work.imputed_data                     
+replace;                                    
+run;
+
+
+proc import datafile='C:\Users\Ahmed\OneDrive\Documents\Masters\Second_Year\Master Thesis Data Science\Prenatal stress study\data\HRV\HRV_pre_impute_wide.xlsx'
+  out=work.pre_impute_wide
+  dbms=xlsx
+  replace;
+run;
+
+
+
+/*Create “originally missing” flags:
+Prepare original dataset with “_orig” names, to be able to distinguish them from the imputed ones*/
+
+proc sort data=hrv_pre_impute;  by Subject_ID; run;
+proc sort data=imputed_data;  by Subject_ID; run;
+
+
+data hrv_imputed_ln_flagged;
+  merge
+    imputed_data (in=inImp)
+    hrv_pre_impute (in=inOrig
+      rename = (
+        /* RMSSD */
+        lnRMSSD_msec_T1 = lnRMSSD_msec_T1_orig
+        lnRMSSD_msec_T2 = lnRMSSD_msec_T2_orig
+        lnRMSSD_msec_T3 = lnRMSSD_msec_T3_orig
+        lnRMSSD_msec_T4 = lnRMSSD_msec_T4_orig
+        lnRMSSD_msec_T5 = lnRMSSD_msec_T5_orig
+        lnRMSSD_msec_T6 = lnRMSSD_msec_T6_orig
+
+        /* SDNN */
+        lnSDNN_msec_T1  = lnSDNN_msec_T1_orig
+        lnSDNN_msec_T2  = lnSDNN_msec_T2_orig
+        lnSDNN_msec_T3  = lnSDNN_msec_T3_orig
+        lnSDNN_msec_T4  = lnSDNN_msec_T4_orig
+        lnSDNN_msec_T5  = lnSDNN_msec_T5_orig
+        lnSDNN_msec_T6  = lnSDNN_msec_T6_orig
+
+        /* RSA */
+        lnRSA0_msec_T1  = lnRSA0_msec_T1_orig
+        lnRSA0_msec_T2  = lnRSA0_msec_T2_orig
+        lnRSA0_msec_T3  = lnRSA0_msec_T3_orig
+        lnRSA0_msec_T4  = lnRSA0_msec_T4_orig
+        lnRSA0_msec_T5  = lnRSA0_msec_T5_orig
+        lnRSA0_msec_T6  = lnRSA0_msec_T6_orig
+
+        /* SCL */
+        lnAverage_SCL_uS_T1 = lnAverage_SCL_uS_T1_orig
+        lnAverage_SCL_uS_T2 = lnAverage_SCL_uS_T2_orig
+
+        /* LF / HF */
+        lnLF_ms_T1 = lnLF_ms_T1_orig
+        lnLF_ms_T3 = lnLF_ms_T3_orig
+        lnLF_ms_T4 = lnLF_ms_T4_orig
+        lnLF_ms_T6 = lnLF_ms_T6_orig
+
+        lnHF_ms_T1 = lnHF_ms_T1_orig
+        lnHF_ms_T3 = lnHF_ms_T3_orig
+        lnHF_ms_T4 = lnHF_ms_T4_orig
+        lnHF_ms_T6 = lnHF_ms_T6_orig
+
+        /* LFHF */
+        lnLFHF_T1 = lnLFHF_T1_orig
+        lnLFHF_T3 = lnLFHF_T3_orig
+        lnLFHF_T4 = lnLFHF_T4_orig
+        lnLFHF_T6 = lnLFHF_T6_orig
+
+        /* PEP */
+        PEP_msec_T1 = PEP_msec_T1_orig
+        PEP_msec_T2 = PEP_msec_T2_orig
+        PEP_msec_T3 = PEP_msec_T3_orig
+        PEP_msec_T4 = PEP_msec_T4_orig
+        PEP_msec_T5 = PEP_msec_T5_orig
+        PEP_msec_T6 = PEP_msec_T6_orig
+      )
+    );
+  by Subject_ID;
+  if inImp;   /* keep all rows from imputed data (all _Imputation_) */
+
+  /* ---------- Arrays with explicit variable lists ---------- */
+
+  /* HRV variables */
+  array orig_RMSSD[6] 
+    lnRMSSD_msec_T1_orig lnRMSSD_msec_T2_orig lnRMSSD_msec_T3_orig
+    lnRMSSD_msec_T4_orig lnRMSSD_msec_T5_orig lnRMSSD_msec_T6_orig;
+  array Miss_RMSSD[6]
+    Miss_lnRMSSD_T1 Miss_lnRMSSD_T2 Miss_lnRMSSD_T3
+    Miss_lnRMSSD_T4 Miss_lnRMSSD_T5 Miss_lnRMSSD_T6;
+
+  array orig_SDNN[6]
+    lnSDNN_msec_T1_orig lnSDNN_msec_T2_orig lnSDNN_msec_T3_orig
+    lnSDNN_msec_T4_orig lnSDNN_msec_T5_orig lnSDNN_msec_T6_orig;
+  array Miss_SDNN[6]
+    Miss_lnSDNN_T1 Miss_lnSDNN_T2 Miss_lnSDNN_T3
+    Miss_lnSDNN_T4 Miss_lnSDNN_T5 Miss_lnSDNN_T6;
+
+  array orig_RSA[6]
+    lnRSA0_msec_T1_orig lnRSA0_msec_T2_orig lnRSA0_msec_T3_orig
+    lnRSA0_msec_T4_orig lnRSA0_msec_T5_orig lnRSA0_msec_T6_orig;
+  array Miss_RSA[6]
+    Miss_lnRSA0_T1 Miss_lnRSA0_T2 Miss_lnRSA0_T3
+    Miss_lnRSA0_T4 Miss_lnRSA0_T5 Miss_lnRSA0_T6;
+
+  array orig_PEP[6]
+    PEP_msec_T1_orig PEP_msec_T2_orig PEP_msec_T3_orig
+    PEP_msec_T4_orig PEP_msec_T5_orig PEP_msec_T6_orig;
+  array Miss_PEP[6]
+    Miss_PEP_T1 Miss_PEP_T2 Miss_PEP_T3
+    Miss_PEP_T4 Miss_PEP_T5 Miss_PEP_T6;
+
+  /* SCL */
+  array orig_SCL[2]
+    lnAverage_SCL_uS_T1_orig lnAverage_SCL_uS_T2_orig;
+  array Miss_SCL[2]
+    Miss_lnSCL_T1 Miss_lnSCL_T2;
+
+  /* LF / HF / LFHF at T1,3,4,6 */
+  array orig_LF[4]
+    lnLF_ms_T1_orig lnLF_ms_T3_orig lnLF_ms_T4_orig lnLF_ms_T6_orig;
+  array Miss_LF[4]
+    Miss_lnLF_T1 Miss_lnLF_T3 Miss_lnLF_T4 Miss_lnLF_T6;
+
+  array orig_HF[4]
+    lnHF_ms_T1_orig lnHF_ms_T3_orig lnHF_ms_T4_orig lnHF_ms_T6_orig;
+  array Miss_HF[4]
+    Miss_lnHF_T1 Miss_lnHF_T3 Miss_lnHF_T4 Miss_lnHF_T6;
+
+  array orig_LFHF[4]
+    lnLFHF_T1_orig lnLFHF_T3_orig lnLFHF_T4_orig lnLFHF_T6_orig;
+  array Miss_LFHF[4]
+    Miss_lnLFHF_T1 Miss_lnLFHF_T3 Miss_lnLFHF_T4 Miss_lnLFHF_T6;
+
+  /* ---------- Fill flags: 1 if missing in original, 0 otherwise ---------- */
+  do t = 1 to 6;
+    Miss_RMSSD[t] = (orig_RMSSD[t] = .);
+    Miss_SDNN[t]  = (orig_SDNN[t]  = .);
+    Miss_RSA[t]   = (orig_RSA[t]   = .);
+    Miss_PEP[t]   = (orig_PEP[t]   = .);
+  end;
+
+  do t = 1 to 2;
+    Miss_SCL[t] = (orig_SCL[t] = .);
+  end;
+
+  do t = 1 to 4;
+    Miss_LF[t]   = (orig_LF[t]   = .);
+    Miss_HF[t]   = (orig_HF[t]   = .);
+    Miss_LFHF[t] = (orig_LFHF[t] = .);
+  end;
+
+  drop t
+       lnRMSSD_msec_T1_orig lnRMSSD_msec_T2_orig lnRMSSD_msec_T3_orig
+       lnRMSSD_msec_T4_orig lnRMSSD_msec_T5_orig lnRMSSD_msec_T6_orig
+       lnSDNN_msec_T1_orig  lnSDNN_msec_T2_orig  lnSDNN_msec_T3_orig
+       lnSDNN_msec_T4_orig  lnSDNN_msec_T5_orig  lnSDNN_msec_T6_orig
+       lnRSA0_msec_T1_orig  lnRSA0_msec_T2_orig  lnRSA0_msec_T3_orig
+       lnRSA0_msec_T4_orig  lnRSA0_msec_T5_orig  lnRSA0_msec_T6_orig
+       lnAverage_SCL_uS_T1_orig lnAverage_SCL_uS_T2_orig
+       lnLF_ms_T1_orig lnLF_ms_T3_orig lnLF_ms_T4_orig lnLF_ms_T6_orig
+       lnHF_ms_T1_orig lnHF_ms_T3_orig lnHF_ms_T4_orig lnHF_ms_T6_orig
+       lnLFHF_T1_orig lnLFHF_T3_orig lnLFHF_T4_orig lnLFHF_T6_orig
+       PEP_msec_T1_orig PEP_msec_T2_orig PEP_msec_T3_orig
+       PEP_msec_T4_orig PEP_msec_T5_orig PEP_msec_T6_orig;
+run;
+
+
+
+proc print data=hrv_imputed_ln_flagged;
+  by Subject_ID;
+  var _Imputation_ PEP_msec_T1-PEP_msec_T6;
+run;
+
+proc print data=hrv_imputed_ln_flagged;
+  by Subject_ID;
+  var _Imputation_ lnRMSSD_msec_T1-lnRMSSD_msec_T6;
+run;
+
+proc print data=hrv_imputed_ln_flagged;
+  where Subject_ID=101;
+  var _Imputation_ lnSDNN_msec_T1-lnSDNN_msec_T6;
+run;
+
+
+proc print data=hrv_imputed_ln_flagged;
+  by Subject_ID;
+  var _Imputation_ lnRSA0_msec_T1-lnRSA0_msec_T6;
+run;
+
+
+proc print data=hrv_imputed_ln_flagged;
+  where Subject_ID=101;
+  var _Imputation_ lnHF_ms_T1 lnHF_ms_T3 lnHF_ms_T4 lnHF_ms_T6;
+run;
+
+
+
+proc export data=hrv_imputed_ln_flagged
+  outfile='C:\Users\Ahmed\OneDrive\Documents\Masters\Second_Year\Master Thesis Data Science\Prenatal stress study\data\HRV\merged_imp_miss_indicator_SAS.xlsx'
+  dbms=xlsx
+  replace;
+run;
+
+
+
+
+/*================================
+	  RESHAPE TO LONG FORMAT
+ =================================*/
+
+
+/* Optional nice labels for outputs */
+proc format;
+  value condition01_ 0='Rest' 1='Stress';
+  value $phase 'Baseline'='Baseline' 'Stress'='Stress' 'Recovery'='Recovery';
+run;
+
+/* Use the SAS dataset that already has the Miss_* flags */
+proc sort data=hrv_imputed_ln_flagged;
+  by _Imputation_ Subject_ID;
+run;
+
+data hrv_long_imputed_miss_ind;
+  set hrv_imputed_ln_flagged;
+  by _Imputation_ Subject_ID;
+
+  /* ---------- Arrays for values ---------- */
+  array lnRMSSD_a[6]  lnRMSSD_msec_T1-lnRMSSD_msec_T6;
+  array lnSDNN_a[6]   lnSDNN_msec_T1-lnSDNN_msec_T6;
+  array lnRSA_a[6]    lnRSA0_msec_T1-lnRSA0_msec_T6;
+  array PEP_a[6]      PEP_msec_T1-PEP_msec_T6;
+
+  array lnSCL_a[2]    lnAverage_SCL_uS_T1-lnAverage_SCL_uS_T2;
+
+  /* ---------- Arrays for missingness flags (wide) ---------- */
+  array Miss_lnRMSSD_a[6] Miss_lnRMSSD_T1-Miss_lnRMSSD_T6;
+  array Miss_lnSDNN_a[6]  Miss_lnSDNN_T1-Miss_lnSDNN_T6;
+  array Miss_lnRSA_a[6]   Miss_lnRSA0_T1-Miss_lnRSA0_T6;
+  array Miss_PEP_a[6]     Miss_PEP_T1-Miss_PEP_T6;
+
+  array Miss_lnSCL_a[2]   Miss_lnSCL_T1-Miss_lnSCL_T2;
+
+  /* Frequency-domain vars retained wide (T1,3,4,6 only) */
+  retain lnHF_ms_T1 lnHF_ms_T3 lnHF_ms_T4 lnHF_ms_T6;
+  retain lnLF_ms_T1 lnLF_ms_T3 lnLF_ms_T4 lnLF_ms_T6;
+  retain lnLFHF_T1  lnLFHF_T3  lnLFHF_T4  lnLFHF_T6;
+
+  /* and their missingness flags */
+  retain Miss_lnHF_T1 Miss_lnHF_T3 Miss_lnHF_T4 Miss_lnHF_T6;
+  retain Miss_lnLF_T1 Miss_lnLF_T3 Miss_lnLF_T4 Miss_lnLF_T6;
+  retain Miss_lnLFHF_T1 Miss_lnLFHF_T3 Miss_lnLFHF_T4 Miss_lnLFHF_T6;
+
+  /* ---------- Long reshaping ---------- */
+  do Time = 1 to 6;
+
+    /* ----- Mean structure vars + flags ----- */
+    lnRMSSD       = lnRMSSD_a[Time];
+    Miss_lnRMSSD  = Miss_lnRMSSD_a[Time];
+
+    lnSDNN        = lnSDNN_a[Time];
+    Miss_lnSDNN   = Miss_lnSDNN_a[Time];
+
+    lnRSA         = lnRSA_a[Time];
+    Miss_lnRSA    = Miss_lnRSA_a[Time];
+
+    PEP_msec      = PEP_a[Time];
+    Miss_PEP      = Miss_PEP_a[Time];
+
+    /* ----- SCL (only T1,T2 observed by design) ----- */
+    if Time in (1,2) then do;
+      lnSCL      = lnSCL_a[Time];
+      Miss_lnSCL = Miss_lnSCL_a[Time];
+    end;
+    else do;
+      lnSCL      = .;
+      Miss_lnSCL = .;   /* structurally missing (not even in pre-impute) */
+    end;
+
+    /* ----- Frequency-domain (T1,3,4,6 only) + flags ----- */
+    select (Time);
+      when (1) do;
+        lnHF       = lnHF_ms_T1;
+        lnLF       = lnLF_ms_T1;
+        lnLFHF     = lnLFHF_T1;
+        Miss_lnHF   = Miss_lnHF_T1;
+        Miss_lnLF   = Miss_lnLF_T1;
+        Miss_lnLFHF = Miss_lnLFHF_T1;
+      end;
+      when (2) do;
+        lnHF       = .;
+        lnLF       = .;
+        lnLFHF     = .;
+        Miss_lnHF   = .; /* structurally missing by design */
+        Miss_lnLF   = .;
+        Miss_lnLFHF = .;
+      end;
+      when (3) do;
+        lnHF       = lnHF_ms_T3;
+        lnLF       = lnLF_ms_T3;
+        lnLFHF     = lnLFHF_T3;
+        Miss_lnHF   = Miss_lnHF_T3;
+        Miss_lnLF   = Miss_lnLF_T3;
+        Miss_lnLFHF = Miss_lnLFHF_T3;
+      end;
+      when (4) do;
+        lnHF       = lnHF_ms_T4;
+        lnLF       = lnLF_ms_T4;
+        lnLFHF     = lnLFHF_T4;
+        Miss_lnHF   = Miss_lnHF_T4;
+        Miss_lnLF   = Miss_lnLF_T4;
+        Miss_lnLFHF = Miss_lnLFHF_T4;
+      end;
+      when (5) do;
+        lnHF       = .;
+        lnLF       = .;
+        lnLFHF     = .;
+        Miss_lnHF   = .; /* structurally missing by design */
+        Miss_lnLF   = .;
+        Miss_lnLFHF = .;
+      end;
+      when (6) do;
+        lnHF       = lnHF_ms_T6;
+        lnLF       = lnLF_ms_T6;
+        lnLFHF     = lnLFHF_T6;
+        Miss_lnHF   = Miss_lnHF_T6;
+        Miss_lnLF   = Miss_lnLF_T6;
+        Miss_lnLFHF = Miss_lnLFHF_T6;
+      end;
+      otherwise do;
+        lnHF       = .;
+        lnLF       = .;
+        lnLFHF     = .;
+        Miss_lnHF   = .;
+        Miss_lnLF   = .;
+        Miss_lnLFHF = .;
+      end;
+    end;
+
+    /* ===== Condition variables ===== */
+    REST_VS_STRESS = (Time in (2,3,4,5));   /* 1=Stress, 0=Rest (1,6) */
+    label REST_VS_STRESS = "Condition: 1=Stress (T2–T5), 0=Rest (T1,T6)";
+    format REST_VS_STRESS condition01_.;
+
+    length PHASE $9;
+    if Time=1 then PHASE='Baseline';
+    else if Time in (2,3,4,5) then PHASE='Stress';
+    else if Time=6 then PHASE='Recovery';
+    label PHASE = "Phase (Baseline/Stress/Recovery)";
+
+    output;
+  end;
+
+  keep _Imputation_ Subject_ID Gender Group Anxiety_mother Time
+       REST_VS_STRESS PHASE
+       lnRMSSD lnSDNN lnHF lnLF lnLFHF lnRSA lnSCL PEP_msec
+       Miss_lnRMSSD Miss_lnSDNN Miss_lnHF Miss_lnLF Miss_lnLFHF
+       Miss_lnRSA Miss_lnSCL Miss_PEP;
+run;
+
+proc export data=hrv_long_imputed_miss_ind
+outfile='C:\Users\Ahmed\OneDrive\Documents\Masters\Second_Year\Master Thesis Data Science\Prenatal stress study\data\HRV\hrv_fcs_imputed_Long_miss_flagged.xlsx'
+dbms=xlsx 
+replace;
+run;
+
+
+
+/* Quick sanity checks */
+proc freq data=hrv_long_imputed_miss_ind;
+  tables _Imputation_*Time / nopercent norow nocol;
+  tables Time*REST_VS_STRESS / nopercent norow nocol;
+  tables Time*PHASE / nopercent norow nocol;
+run;
+
+proc means data=hrv_long_imputed_miss_ind n min mean max;
+  class Time;
+  var lnRMSSD lnSDNN lnHF lnLF lnLFHF lnRSA lnSCL PEP_msec;
+  title "QC: Ranges by Time (long format)";
+run;
+
+/*Confirmation*/
+/* Count nonmissing per Time for each variable to verify structural missingness */
+proc means data=hrv_long_imputed_miss_ind n nmiss;
+  class Time;
+  var lnRMSSD lnSDNN lnHF lnLF lnLFHF lnRSA lnSCL PEP_msec;
+  title "Nonmissing (N) and Missing (NMISS) by Time";
+run;
+
+/* Or a crisper table: one row per variable x time */
+proc sql;
+  create table nm_by_time as
+  select Time,
+         sum(lnRMSSD is not missing) as N_lnRMSSD,
+         sum(lnSDNN  is not missing) as N_lnSDNN,
+         sum(lnHF    is not missing) as N_lnHF,
+         sum(lnLF    is not missing) as N_lnLF,
+         sum(lnLFHF  is not missing) as N_lnLFHF,
+         sum(lnRSA   is not missing) as N_lnRSA,
+         sum(lnSCL   is not missing) as N_lnSCL,
+         sum(PEP_msec is not missing) as N_PEP
+  from hrv_long_imputed_miss_ind
+  group by Time
+  order by Time;
+quit;
+
+
+/*Compare with the long data from MAR to see if they are consistent*/
+proc import datafile='C:/Users/Ahmed/OneDrive/Documents/Masters/Second_Year/Master Thesis Data Science/Prenatal stress study/data/HRV/hrv_fcs_imputed_Long.xlsx'
+dbms=xlsx
+out=work.hrv_long
+replace;
+run;
+
+/*Perfect match*/
+
+
+/*=======================================
+		  MNAR delta-adjustment
+  ======================================= */
+
+/* Main macro: create MNAR-adjusted datasets */
+%macro make_mnar_datasets(
+    data      = hrv_long_imputed_miss_ind,
+    outprefix = hrv_mnar
+    );
+
+  /* MNAR patterns: 1=stress only, 2=high only, 3=high×stress */
+  %let patterns = stress high highstress;
+
+  %do pi = 1 %to %sysfunc(countw(&patterns.));
+    %let pattern = %scan(&patterns., &pi.);
+
+    /* which indicator variable to use inside the DATA step */
+    %if &pattern.=stress %then %let patt_var = I_stress;
+    %else %if &pattern.=high %then %let patt_var = I_high;
+    %else %if &pattern.=highstress %then %let patt_var = I_highstress;
+
+    /* ---- Explicit delta grid (7 values) ---- */
+    %do di = 1 %to 7;
+      %if &di.=1 %then %let delta = -0.30;
+      %else %if &di.=2 %then %let delta = -0.20;
+      %else %if &di.=3 %then %let delta = -0.10;
+      %else %if &di.=4 %then %let delta =  0;
+      %else %if &di.=5 %then %let delta =  0.10;
+      %else %if &di.=6 %then %let delta =  0.20;
+      %else %if &di.=7 %then %let delta =  0.30;
+
+      /* dataset name: e.g. hrv_mnar_stress_d1 ... d7 */
+      %let outds = &outprefix._&pattern._d&di.;
+
+      data &outds.;
+        set &data.;
+
+        /* pattern indicators (same for all outcomes) */
+        I_stress     = (REST_VS_STRESS = 1);                      /* T2–T5, both groups      */
+        I_high       = (Group = 1);                               /* high PMA, all times     */
+        I_highstress = (Group = 1 and REST_VS_STRESS = 1);        /* high PMA under stress   */
+
+        /* choose which indicator to use for this pattern */
+        pattern_ind = &patt_var.;
+
+        length MNAR_pattern $12;
+        MNAR_pattern = "&pattern.";
+        delta        = &delta.;   /* numeric value of this d */
+
+        /* ---- Apply delta only to originally missing cells ---- */
+        /* lnRMSSD */
+        if Miss_lnRMSSD = 1 then lnRMSSD = lnRMSSD + &delta. * pattern_ind;
+
+        /* lnSDNN */
+        if Miss_lnSDNN  = 1 then lnSDNN  = lnSDNN  + &delta. * pattern_ind;
+
+        /* lnRSA */
+        if Miss_lnRSA   = 1 then lnRSA   = lnRSA   + &delta. * pattern_ind;
+
+        /* lnSCL (T1,T2; others structurally missing with Miss_lnSCL=.) */
+        if Miss_lnSCL   = 1 then lnSCL   = lnSCL   + &delta. * pattern_ind;
+
+        /* Frequency-domain */
+        if Miss_lnHF    = 1 then lnHF    = lnHF    + &delta. * pattern_ind;
+        if Miss_lnLF    = 1 then lnLF    = lnLF    + &delta. * pattern_ind;
+        if Miss_lnLFHF  = 1 then lnLFHF  = lnLFHF  + &delta. * pattern_ind;
+
+        /* PEP (raw scale) */
+        if Miss_PEP     = 1 then PEP_msec = PEP_msec + &delta. * pattern_ind;
+
+      run;
+
+    %end; /* delta loop (1–7) */
+
+  %end; /* pattern loop */
+
+%mend make_mnar_datasets;
+
+
+/* ===== Run it (after deleting the old MNAR datasets if you want) ===== */
+proc datasets lib=work nolist;
+  delete hrv_mnar_:;
+quit;
+
+%make_mnar_datasets();
 
 
 
@@ -2424,5 +3627,77 @@ run;
 
 
 
+
+%put NOTE: DELTAS=&deltas.;
+%put NOTE: NDeltas=%sysfunc(countw(&deltas.));
+
+
+
+proc freq data=hrv_mnar_stress_d1; tables delta; run;
+
+
+
+
+proc mixed data=hrv_mnar_highstress_d1;
+   by _Imputation_;
+   class Subject_ID Group(ref='0') Gender(ref='m') Time REST_VS_STRESS(ref='0');
+   model lnRMSSD = Group Gender REST_VS_STRESS Group*REST_VS_STRESS / solution;
+   random intercept / subject=Subject_ID;
+   repeated Time / subject=Subject_ID type=ar(1);
+   ods output solutionF=sol_d1;
+run;
+proc contents data=hrv_mnar_highstress_d1(obs=10); run;
+
+
+proc mixed data=hrv_mnar_highstress_d1 nobound method=reml;
+    by _Imputation_;
+    class Subject_ID Group(ref='0') REST_VS_STRESS(ref='Rest') Gender(ref='m') Time;
+
+    model lnRMSSD = Group Gender REST_VS_STRESS Group*REST_VS_STRESS / solution ddfm=kr; 
+    random intercept  / subject=Subject_ID;
+    repeated Time / subject=Subject_ID type=AR(1);
+
+    ods output SolutionF = lnRMSSD_mnarF_;
+run;
+
+/* Keep only the estimable rows (no reference levels) */
+data lnRMSSD_mnarF_;
+    set lnRMSSD_mnarF_;
+    where StdErr ne .;  * drop rows like Group=1 with StdErr=. ;
+run;
+
+proc print data=lnRMSSD_mnarF_(obs=20);
+run;
+
+
+data lnRMSSD_mnarF_2;
+    set lnRMSSD_mnarF_;
+    length Parameter $40;
+
+    /* create a single label for each parameter */
+    if Effect = 'Intercept' then Parameter = 'Intercept';
+    else if Effect = 'Group' then Parameter = 'Group_high_vs_lowmed';
+    else if Effect = 'REST_VS_STRESS' then Parameter = 'Stress_vs_rest';
+    else if Effect = 'Group*REST_VS_STRESS' then Parameter = 'Interaction_GroupxStress';
+
+    keep _Imputation_ Parameter Estimate StdErr;
+run;
+
+proc sort data=lnRMSSD_mnarF_2;
+    by Parameter _Imputation_;
+run;
+
+proc print data=lnRMSSD_mnarF_2(firstobs=20 obs=40);
+run;
+
+proc sort data=lnRMSSD_mnarF_2;
+    by Parameter _Imputation_;
+run;
+
+proc mianalyze data=lnRMSSD_mnarF_2;
+    by Parameter;          * one pooled result per parameter label;
+    modeleffects Estimate; * variable that holds the coefficient;
+    stderr StdErr;         * variable that holds the SE;
+run;
 
 
