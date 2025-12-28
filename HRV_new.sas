@@ -61,7 +61,7 @@ proc means data=hrv_pre_impute n min mean max;
     title "QC: Check variable ranges before imputation";
 run;
 
-proc means data=hrv_pre_impute n min mean max;  /*check missingness at each time point*/
+proc means data=hrv_pre_impute n nmiss min mean std max;  /*check missingness at each time point*/
     var lnRSA0_msec_T1-lnRSA0_msec_T6 lnAverage_SCL_uS_T1-lnAverage_SCL_uS_T2
 		lnSDNN_msec_T1-lnSDNN_msec_T6 lnRMSSD_msec_T1-lnRMSSD_msec_T6
 		lnHF_ms_T1 lnHF_ms_T3 lnHF_ms_T4 lnHF_ms_T6 lnLF_ms_T1 lnLF_ms_T3 lnLF_ms_T4 lnLF_ms_T6 
@@ -104,14 +104,14 @@ proc mi data=hrv_pre_impute
 
   /* --- Tailored fixes --- */
   /* lnRMSSD/SDNN/RSA T5: shrink predictors to high-coverage only */
-   fcs regpmm( lnRMSSD_msec_T5 = Gender Group lnRMSSD_msec_T4 lnRMSSD_msec_T6);
-   fcs regpmm( lnSDNN_msec_T5 = Gender Group lnSDNN_msec_T4 lnRMSSD_msec_T6);
-   fcs regpmm( lnRSA0_msec_T5 = Gender Group lnRSA0_msec_T4 lnRSA0_msec_T6);
+   fcs regpmm( lnRMSSD_msec_T5 = Gender Group Anxiety_mother lnRMSSD_msec_T4 lnRMSSD_msec_T6);
+   fcs regpmm( lnSDNN_msec_T5 = Gender Group Anxiety_mother lnSDNN_msec_T4 lnRMSSD_msec_T6);
+   fcs regpmm( lnRSA0_msec_T5 = Gender Group Anxiety_mother lnRSA0_msec_T4 lnRSA0_msec_T6);
 
 
   /*PEP*/
   fcs regpmm( PEP_msec_T1 = Gender Group Anxiety_mother lnRMSSD_msec_T1 lnSDNN_msec_T1 );
-  fcs regpmm( PEP_msec_T2 = Gender Group Anxiety_mother lnRMSSD_msec_T2 lnSDNN_msec_T2 PEP_msec_T1 );
+  fcs regpmm( PEP_msec_T2 = Gender Group Anxiety_mother lnRMSSD_msec_T2 lnSDNN_msec_T2 PEP_msec_T1 PEP_msec_T2);
   fcs regpmm( PEP_msec_T3 = Gender Group Anxiety_mother lnRMSSD_msec_T3 lnSDNN_msec_T3 PEP_msec_T2 );
   fcs regpmm( PEP_msec_T4 = Gender Group Anxiety_mother lnRMSSD_msec_T4 lnSDNN_msec_T4 PEP_msec_T3 );
   fcs regpmm( PEP_msec_T5 = Gender Group Anxiety_mother lnRMSSD_msec_T5 lnSDNN_msec_T5 PEP_msec_T4 );
@@ -181,6 +181,17 @@ dbms=xlsx
 out=work.imputed_data                     
 replace;                                    
 run;
+
+proc import datafile='C:\Users\Ahmed\OneDrive\Documents\Masters\Second_Year\Master Thesis Data Science\Prenatal stress study\data\HRV\hrv_data.xlsx'
+dbms=xlsx                                   
+out=work.hrv_original                     
+replace;                                    
+run;
+
+proc means data=hrv_original n nmiss mean std min max skew kurt; run;
+
+
+
 
 /* Summary for PEP distribution (Imputation 1 only) */
 proc means data=imputed_data n mean std min max skew kurt;
@@ -664,6 +675,32 @@ run;
 
 
 
+/*proc mixed data=hrv_long nobound method=reml outpm=RMSSD_PM;*/
+/*    by _Imputation_;*/
+/*    class Subject_ID Time*/
+/*          Group (ref='0')*/
+/*          REST_VS_STRESS (ref='0') */
+/*          Gender (ref='m');*/
+/**/
+/*    model lnRMSSD =*/
+/*        Group*/
+/*        REST_VS_STRESS*/
+/*        Gender*/
+/*        / solution ddfm=kr;*/
+/**/
+/*    random intercept / subject=Subject_ID;*/
+/*    repeated Time / subject=Subject_ID type=AR(1);*/
+/*run;*/
+
+
+
+
+
+
+
+
+
+
 /*Fit the final model*/
 /* Final mixed model for lnRMSSD across 10 imputations */
 
@@ -730,6 +767,54 @@ proc mianalyze data=RMSSD_Parms2;
     modeleffects Estimate; * variable that holds the coefficient;
     stderr StdErr;         * variable that holds the SE;
 run;
+
+
+
+
+/*Model assumptions: */
+
+proc sort data=hrv_long(where=(_Imputation_=1)) out=hrv_imp1;
+  by Subject_ID Time;
+run;
+
+proc glimmix data=hrv_imp1 nobound method=rspl;
+  class Subject_ID Time Group(ref='0') REST_VS_STRESS(ref='0') Gender(ref='m');
+
+  model lnRMSSD =
+        Group
+        REST_VS_STRESS
+        Gender
+        Group*REST_VS_STRESS
+        / solution ddfm=kr dist=normal link=identity;
+
+  random intercept / subject=Subject_ID;
+
+/*   AR(1) within subject over Time */
+  random _residual_ / subject=Subject_ID type=ar(1);
+
+  output out=RMSSD_Diag
+         pred=Pred
+         resid=Resid
+         student=StuResid;
+run;
+
+
+proc sgplot data=RMSSD_Diag;
+  scatter x=Pred y=Resid;
+  refline 0 / axis=y;
+run;
+
+proc univariate data=RMSSD_Diag normal;
+  var Resid;
+  qqplot Resid / normal(mu=est sigma=est);
+run;
+
+proc sgplot data=RMSSD_Diag;
+  histogram Resid;
+  density Resid;
+run;
+
+
 
 
 /*Interaction is not significant, fit an additive model to be able to correctly interpret the overall main effects*/
@@ -1161,6 +1246,47 @@ run;
 
 
 
+proc sort data=hrv_long(where=(_Imputation_=1)) out=hrv_imp1;
+  by Subject_ID Time;
+run;
+
+proc glimmix data=hrv_imp1 nobound method=rspl;
+  class Subject_ID Time Group(ref='0') REST_VS_STRESS(ref='0') Gender(ref='m');
+
+  model lnSDNN =
+        Group
+        REST_VS_STRESS
+        Gender
+/*        Group*REST_VS_STRESS*/
+        / solution ddfm=kr dist=normal link=identity;
+
+  random intercept / subject=Subject_ID;
+
+   /*AR(1) within subject over Time*/ 
+  random _residual_ / subject=Subject_ID type=ar(1);
+
+  output out=SDNN_Diag
+         pred=Pred
+         resid=Resid
+         student=StuResid;
+run;
+
+
+proc sgplot data=SDNN_Diag;
+  scatter x=Pred y=Resid;
+  refline 0 / axis=y;
+run;
+
+proc univariate data=SDNN_Diag normal;
+  var Resid;
+  qqplot Resid / normal(mu=est sigma=est);
+run;
+
+proc sgplot data=SDNN_Diag;
+  histogram Resid;
+  density Resid;
+run;
+
 
 
 
@@ -1539,7 +1665,51 @@ run;
 
 
 
-/*Time model; just replace condition by time, remove AR*/
+/* Model assumptions*/
+proc sort data=hrv_long(where=(_Imputation_=1)) out=hrv_imp1;
+  by Subject_ID Time;
+run;
+
+proc glimmix data=hrv_imp1 nobound method=rspl;
+  class Subject_ID Time Group(ref='0') REST_VS_STRESS(ref='0') Gender(ref='m');
+
+  model lnRSA =
+        Group
+        REST_VS_STRESS
+        Gender
+/*        Group*REST_VS_STRESS*/
+        / solution ddfm=kr dist=normal link=identity;
+
+  random intercept / subject=Subject_ID;
+
+   /*AR(1) within subject over Time*/ 
+  random _residual_ / subject=Subject_ID type=ar(1);
+
+  output out=lnRSA_Diag
+         pred=Pred
+         resid=Resid
+         student=StuResid;
+run;
+
+
+proc sgplot data=lnRSA_Diag;
+  scatter x=Pred y=Resid;
+  refline 0 / axis=y;
+run;
+
+proc univariate data=lnRSA_Diag normal;
+  var Resid;
+  qqplot Resid / normal(mu=est sigma=est);
+run;
+
+proc sgplot data=lnRSA_Diag;
+  histogram Resid;
+  density Resid;
+run;
+
+
+
+
 
 
 
@@ -1935,6 +2105,60 @@ run;
 
 
 
+/*Model assumptions*/
+/* Model assumptions*/
+proc sort data=hrv_long(where=(_Imputation_=1)) out=hrv_imp1;
+  by Subject_ID Time;
+run;
+
+proc glimmix data=hrv_imp1 nobound method=rspl;
+  class Subject_ID Time Group(ref='0') REST_VS_STRESS(ref='0') Gender(ref='m');
+
+  model PEP_msec =
+        Group
+        REST_VS_STRESS
+        Gender
+/*        Group*REST_VS_STRESS*/
+        / solution ddfm=kr dist=normal link=identity;
+
+  random intercept / subject=Subject_ID;
+
+   /*AR(1) within subject over Time*/ 
+  random _residual_ / subject=Subject_ID type=simple;
+
+  output out=PEP_Diag
+         pred=Pred
+         resid=Resid
+         student=StuResid;
+run;
+
+
+proc sgplot data=PEP_Diag;
+  scatter x=Pred y=Resid;
+  refline 0 / axis=y;
+run;
+
+proc univariate data=PEP_Diag normal;
+  var Resid;
+  qqplot Resid / normal(mu=est sigma=est);
+run;
+
+proc sgplot data=PEP_Diag;
+  histogram Resid;
+  density Resid;
+run;
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2290,6 +2514,121 @@ run;
 
 
 
+/*Removing stress*gender*/
+
+proc mixed data=hrv_long nobound method=reml;
+    by _Imputation_;
+    class Subject_ID Group(ref='0') REST_VS_STRESS(ref='0') Gender(ref='m') Time;
+
+    model lnHF =
+        Group
+        REST_VS_STRESS
+        Gender
+/*		Group*REST_VS_STRESS*/
+/*        REST_VS_STRESS*Gender*/
+        / solution ddfm=kr;
+    random intercept / subject=Subject_ID;
+    repeated Time / subject=Subject_ID type=AR(1);
+
+    ods output SolutionF = lnHF_SolutionF1;
+run;
+
+
+data lnHF_SolutionF1;
+    set lnHF_SolutionF1;
+    where StdErr ne .;  * drop rows like Group=1 with StdErr=. ;
+run;
+
+proc print data=lnHF_SolutionF1(obs=20);
+run;
+
+
+data lnHF_SolutionF21;
+    set lnHF_SolutionF1;
+    length Parameter $40;
+
+    /* create a single label for each parameter */
+    if Effect = 'Intercept' then Parameter = 'Intercept';
+    else if Effect = 'Group' then Parameter = 'Group_high_vs_lowmed';
+    else if Effect = 'REST_VS_STRESS' then Parameter = 'Stress_vs_rest';
+/*    else if Effect = 'Group*REST_VS_STRESS' then Parameter = 'Interaction_GroupxStress';*/
+/*	else if Effect = 'REST_VS_STRES*Gender' then Parameter = 'Interaction_StressxGender';*/
+    else if Effect = 'Gender' then Parameter = 'Female_vs_male';
+
+    keep _Imputation_ Parameter Estimate StdErr;
+run;
+
+proc sort data=lnHF_SolutionF21;
+    by Parameter _Imputation_;
+run;
+
+/*proc print data=lnHF_SolutionF21(firstobs=20 obs=40);*/
+/*run;*/
+
+proc sort data=lnHF_SolutionF21;
+    by Parameter _Imputation_;
+run;
+
+proc mianalyze data=lnHF_SolutionF21;
+    by Parameter;          * one pooled result per parameter label;
+    modeleffects Estimate; * variable that holds the coefficient;
+    stderr StdErr;         * variable that holds the SE;
+run;
+
+
+
+
+
+/*Model assumptions*/
+proc sort data=hrv_long(where=(_Imputation_=1)) out=hrv_imp1;
+  by Subject_ID Time;
+run;
+
+proc glimmix data=hrv_imp1 nobound method=rspl;
+  class Subject_ID Time Group(ref='0') REST_VS_STRESS(ref='0') Gender(ref='m');
+
+  model lnHF =
+        Group
+        REST_VS_STRESS
+        Gender
+/*        Group*REST_VS_STRESS*/
+		Gender*REST_VS_STRESS
+        / solution ddfm=kr dist=normal link=identity;
+
+  random intercept / subject=Subject_ID;
+
+   /*AR(1) within subject over Time*/ 
+  random _residual_ / subject=Subject_ID type=ar(1);
+
+  output out=lnHF_Diag
+         pred=Pred
+         resid=Resid
+         student=StuResid;
+run;
+
+
+proc sgplot data=lnHF_Diag;
+  scatter x=Pred y=Resid;
+  refline 0 / axis=y;
+run;
+
+proc univariate data=lnHF_Diag normal;
+  var Resid;
+  qqplot Resid / normal(mu=est sigma=est);
+run;
+
+proc sgplot data=lnHF_Diag;
+  histogram Resid;
+  density Resid;
+run;
+
+
+
+
+
+
+
+
 
 
 
@@ -2634,6 +2973,58 @@ proc mianalyze data=lnLF_Solution_main2;
     modeleffects Estimate; * variable that holds the coefficient;
     stderr StdErr;         * variable that holds the SE;
 run;
+
+
+
+/*Model assumptions*/
+proc sort data=hrv_long(where=(_Imputation_=1)) out=hrv_imp1;
+  by Subject_ID Time;
+run;
+
+proc glimmix data=hrv_imp1 nobound method=rspl;
+  class Subject_ID Time Group(ref='0') REST_VS_STRESS(ref='0') Gender(ref='m');
+
+  model lnLF =
+        Group
+        REST_VS_STRESS
+        Gender
+        Group*REST_VS_STRESS
+
+        / solution ddfm=kr dist=normal link=identity;
+
+  random intercept / subject=Subject_ID;
+
+   /*AR(1) within subject over Time*/ 
+  random _residual_ / subject=Subject_ID type=ar(1);
+
+  output out=lnLF_Diag
+         pred=Pred
+         resid=Resid
+         student=StuResid;
+run;
+
+
+proc sgplot data=lnLF_Diag;
+  scatter x=Pred y=Resid;
+  refline 0 / axis=y;
+run;
+
+proc univariate data=lnLF_Diag normal;
+  var Resid;
+  qqplot Resid / normal(mu=est sigma=est);
+run;
+
+proc sgplot data=lnLF_Diag;
+  histogram Resid;
+  density Resid;
+run;
+
+
+
+
+
+
+
 
 
 
@@ -2988,6 +3379,59 @@ run;
 
 
 
+/*Model assumptions*/
+proc sort data=hrv_long(where=(_Imputation_=1)) out=hrv_imp1;
+  by Subject_ID Time;
+run;
+
+proc glimmix data=hrv_imp1 nobound method=rspl;
+  class Subject_ID Time Group(ref='0') REST_VS_STRESS(ref='0') Gender(ref='m');
+
+  model lnLFHF =
+        Group
+        REST_VS_STRESS
+        Gender
+        Group*REST_VS_STRESS
+		Gender*REST_VS_STRESS
+
+        / solution ddfm=kr dist=normal link=identity;
+
+  random intercept / subject=Subject_ID;
+
+   /*AR(1) within subject over Time*/ 
+  random _residual_ / subject=Subject_ID type=ar(1);
+
+  output out=lnLFHF_Diag
+         pred=Pred
+         resid=Resid
+         student=StuResid;
+run;
+
+
+proc sgplot data=lnLFHF_Diag;
+  scatter x=Pred y=Resid;
+  refline 0 / axis=y;
+run;
+
+proc univariate data=lnLFHF_Diag normal;
+  var Resid;
+  qqplot Resid / normal(mu=est sigma=est);
+run;
+
+proc sgplot data=lnLFHF_Diag;
+  histogram Resid;
+  density Resid;
+run;
+
+
+
+
+
+
+
+
+
+
 
 
 /*lnSCL*/
@@ -3101,11 +3545,80 @@ run;
 
 /*Final model: lnSCL ~ Group + Gender*/
 proc mixed data=hrv_long nobound method=REML;
-	where _imputation_ = 5;
-    class Subject_ID Group(ref='0') Gender(ref='m');
-    model lnSCL = Group Gender / solution;
+    where _Imputation_ = 5;
+
+    class Subject_ID
+          Group (ref='0')
+          Gender (ref='m');
+
+    model lnSCL = Group Gender / solution cl;
+
     random intercept / subject=Subject_ID;
+
+    ods output SolutionF = lnSCL_SolutionF;
 run;
+
+
+
+
+/*Model assumptions*/
+proc sort data=hrv_long(where=(_Imputation_=1)) out=hrv_imp1;
+  by Subject_ID Time;
+run;
+
+proc glimmix data=hrv_imp1 nobound method=rspl;
+  class Subject_ID Time Group(ref='0') REST_VS_STRESS(ref='0') Gender(ref='m');
+
+  model lnSCL =
+        Group
+        Gender
+
+        / solution ddfm=kr dist=normal link=identity;
+
+  random intercept / subject=Subject_ID;
+
+   /*AR(1) within subject over Time*/ 
+/*  random _residual_ / subject=Subject_ID type=ar(1);*/
+
+  output out=lnSCL_Diag
+         pred=Pred
+         resid=Resid
+         student=StuResid;
+run;
+
+
+proc sgplot data=lnSCL_Diag;
+  scatter x=Pred y=Resid;
+  refline 0 / axis=y;
+run;
+
+proc univariate data=lnSCL_Diag normal;
+  var Resid;
+  qqplot Resid / normal(mu=est sigma=est);
+run;
+
+proc sgplot data=lnSCL_Diag;
+  histogram Resid;
+  density Resid;
+run;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -3600,8 +4113,8 @@ run;
         /* lnRSA */
         if Miss_lnRSA   = 1 then lnRSA   = lnRSA   + &delta. * pattern_ind;
 
-        /* lnSCL (T1,T2; others structurally missing with Miss_lnSCL=.) */
-        if Miss_lnSCL   = 1 then lnSCL   = lnSCL   + &delta. * pattern_ind;
+        
+/*        if Miss_lnSCL   = 1 then lnSCL   = lnSCL   + &delta. * pattern_ind;*/
 
         /* Frequency-domain */
         if Miss_lnHF    = 1 then lnHF    = lnHF    + &delta. * pattern_ind;
@@ -3639,77 +4152,6 @@ quit;
 %put NOTE: NDeltas=%sysfunc(countw(&deltas.));
 
 
-/*=================================================================================================
-	Pattern one: Stress -> delta only applies in stress blocks (T2–T5) for both PMA groups.
-  ================================================================================================= */
-
-/*===== D1: -0.3 =======*/
-proc freq data=hrv_mnar_stress_d1; tables delta; run;
-proc freq data=hrv_mnar_stress_d1; tables REST_VS_STRESS; run;
-proc print data=hrv_mnar_stress_d1(obs=30); run;
-
-
-/*== Outcome 1: lnRMSSD ==*/ 
-
-/*Note: USE THE SAME FINAL MODEL U USED UNDER MAR*/
-
-proc contents data=hrv_mnar_stress_d1(obs=10); run;
-
-
-proc mixed data=hrv_mnar_stress_d1 nobound method=reml;
-    by _Imputation_;
-    class Subject_ID Group(ref='0') REST_VS_STRESS(ref='0') Gender(ref='m') Time;
-
-    model lnRMSSD = Group Gender REST_VS_STRESS Group*REST_VS_STRESS / solution ddfm=kr; 
-    random intercept  / subject=Subject_ID;
-    repeated Time / subject=Subject_ID type=AR(1);
-
-    ods output SolutionF = lnRMSSD_mnarF_;
-run;
-
-/* Keep only the estimable rows (no reference levels) */
-data lnRMSSD_mnarF_;
-    set lnRMSSD_mnarF_;
-    where StdErr ne .;  * drop rows like Group=1 with StdErr=. ;
-run;
-
-proc print data=lnRMSSD_mnarF_(obs=20);
-run;
-
-
-data lnRMSSD_mnarF_2;
-    set lnRMSSD_mnarF_;
-    length Parameter $40;
-
-    /* create a single label for each parameter */
-    if Effect = 'Intercept' then Parameter = 'Intercept';
-    else if Effect = 'Group' then Parameter = 'Group_high_vs_lowmed';
-    else if Effect = 'REST_VS_STRESS' then Parameter = 'Stress_vs_rest';
-	else if Effect = 'Gender' then Parameter = 'Female_vs_male';
-    else if Effect = 'Group*REST_VS_STRESS' then Parameter = 'Interaction_GroupxStress';
-
-    keep _Imputation_ Parameter Estimate StdErr;
-run;
-
-proc sort data=lnRMSSD_mnarF_2;
-    by Parameter _Imputation_;
-run;
-
-proc print data=lnRMSSD_mnarF_2(firstobs=20 obs=40);
-run;
-
-proc sort data=lnRMSSD_mnarF_2;
-    by Parameter _Imputation_;
-run;
-
-proc mianalyze data=lnRMSSD_mnarF_2;
-    by Parameter;          * one pooled result per parameter label;
-    modeleffects Estimate; * variable that holds the coefficient;
-    stderr StdErr;         * variable that holds the SE;
-run;
-
-
-
 
 
 
@@ -3725,9 +4167,9 @@ run;
 - Stores them in one combined results dataset*/
 
 %macro run_mnar_outcome(
-    outcome = lnLF,              /* variable name */
-    label   = lnLF,              /* label prefix for output datasets */
-    extra_fx = ,                    /* e.g. Gender*REST_VS_STRESS if needed */
+    outcome = lnRMSSD,              /* variable name */
+    label   = lnRMSSD,              /* label prefix for output datasets */
+    extra_fx =,                    /* e.g. Gender*REST_VS_STRESS if needed */
     covtype = AR(1)                 /* covariance structure for repeated */
     );
 
@@ -3772,7 +4214,7 @@ run;
         else if Effect = 'REST_VS_STRESS' then Parameter = 'Stress_vs_rest';
         else if Effect = 'Gender'        then Parameter = 'Female_vs_male';
         else if Effect = 'Group*REST_VS_STRESS' then Parameter = 'Interaction_GroupxStress';
-/*		else if Effect = 'REST_VS_STRESS*Gender' then Parameter = 'Interaction_GenderxStress'*/
+		else if Effect = 'REST_VS_STRES*Gender' then Parameter = 'Interaction_GenderxStress';
         /* extra_fx terms will appear with their Effect name, you can extend mapping if needed */
 
         /* Add identifiers for pattern & delta index */
@@ -3874,8 +4316,23 @@ run;
 
 /*lnHF, try it later*/
 %run_mnar_outcome(outcome=lnHF,   label=lnHF,   extra_fx=REST_VS_STRESS*Gender, covtype=AR(1));
+proc export data=lnHF_MNAR_RESULTS
+    outfile="C:\Users\Ahmed\OneDrive\Documents\Masters\Second_Year\Master Thesis Data Science\Prenatal stress study\data\HRV\lnHF_MNAR_Interaction_Results(1).xlsx"
+    dbms=xlsx
+    replace;
+run;
+
+
+
 
 /*lnLFHF, try it later*/
+%run_mnar_outcome(outcome=lnLFHF,   label=lnLFHF,   extra_fx=REST_VS_STRESS*Gender, covtype=AR(1));
+proc export data=lnLFHF_MNAR_RESULTS
+    outfile="C:\Users\Ahmed\OneDrive\Documents\Masters\Second_Year\Master Thesis Data Science\Prenatal stress study\data\HRV\lnLFHF_MNAR_Interaction_Results(1).xlsx"
+    dbms=xlsx
+    replace;
+run;
+
 
 
 /*lnLF*/
@@ -3888,5 +4345,215 @@ run;
 
 
 
-/*lnSCL*/
+/*lnSCL: No need*/
+
+
+
+/*Main effects model*/
+
+%macro run_mnar_outcome(
+    outcome = lnHF,              /* variable name */
+    label   = lnHF,              /* label prefix for output datasets */
+    extra_fx = REST_VS_STRESS*Gender,                    /* e.g. Gender*REST_VS_STRESS if needed */
+    covtype = AR(1)                 /* covariance structure for repeated */
+    );
+
+  %let patterns = stress high highstress;
+
+  /* combined results across patterns & deltas */
+  %let allres = &label._mnar_results;
+  proc datasets lib=work nolist; delete &allres.; quit;
+
+  %do pi = 1 %to %sysfunc(countw(&patterns.));
+    %let pattern = %scan(&patterns., &pi.);
+
+    %do di = 1 %to 7;
+      %let ds_in = hrv_mnar_&pattern._d&di.;
+
+      /* 1) Fit mixed model on this MNAR dataset */
+      proc mixed data=&ds_in nobound method=reml;
+        by _Imputation_;
+        class Subject_ID 
+              Group(ref='0') 
+              REST_VS_STRESS(ref='0')      /* ref level handled by format, or use ref='Rest' */
+              Gender(ref='m') 
+              Time;
+
+        model &outcome = Group Gender REST_VS_STRESS &extra_fx
+             / solution ddfm=kr;
+
+        random intercept / subject=Subject_ID;
+        repeated Time / subject=Subject_ID type=&covtype.;
+
+        ods output SolutionF = &label._sol_&pattern._d&di.;
+      run;
+
+      /* 2) Keep estimable rows, create a clean Parameter label */
+      data &label._sol_&pattern._d&di.;
+        set &label._sol_&pattern._d&di.;
+        where StdErr ne .;  /* drop reference levels */
+
+        length Parameter $40;
+        if Effect = 'Intercept'          then Parameter = 'Intercept';
+        else if Effect = 'Group'         then Parameter = 'Group_high_vs_lowmed';
+        else if Effect = 'REST_VS_STRESS' then Parameter = 'Stress_vs_rest';
+        else if Effect = 'Gender'        then Parameter = 'Female_vs_male';
+/*        else if Effect = 'Group*REST_VS_STRESS' then Parameter = 'Interaction_GroupxStress';*/
+		else if Effect = 'REST_VS_STRES*Gender' then Parameter = 'Interaction_GenderxStress';
+        /* extra_fx terms will appear with their Effect name, you can extend mapping if needed */
+
+        /* Add identifiers for pattern & delta index */
+        MNAR_pattern = "&pattern.";
+        Delta_index  = &di.;
+        keep _Imputation_ Parameter Estimate StdErr MNAR_pattern Delta_index;
+      run;
+
+      proc sort data=&label._sol_&pattern._d&di.;
+        by Parameter _Imputation_;
+      run;
+
+      /* 3) Pool over imputations for this pattern × delta */
+	 ods output ParameterEstimates=&label._pool_&pattern._d&di.;
+	 proc mianalyze data=&label._sol_&pattern._d&di.;
+     by Parameter;              * one pooled row per Parameter;
+     modeleffects Estimate;     * coefficient;
+     stderr StdErr;             * SE;
+     run;
+     ods output close;
+
+
+      /* 4) Add pattern & delta info to pooled results and append to master */
+      data &label._pool_&pattern._d&di.;
+        set &label._pool_&pattern._d&di.;
+        length Outcome $20;
+        Outcome      = "&outcome.";
+        MNAR_pattern = "&pattern.";
+        Delta_index  = &di.;
+      run;
+
+      proc append base=&allres data=&label._pool_&pattern._d&di. force; run;
+
+    %end; /* di loop */
+  %end; /* pattern loop */
+
+  /* Final combined result: one table for this outcome */
+  proc sort data=&allres;
+    by Outcome MNAR_pattern Delta_index Parameter;
+  run;
+
+%mend run_mnar_outcome;
+
+/*lnRMSSD*/
+%run_mnar_outcome(outcome=lnRMSSD, label=lnRMSSD, extra_fx=, covtype=AR(1));
+
+proc datasets lib=work nolist;
+  delete lnRMSSD_: ;
+quit;
+
+
+proc print data=LNRMSSD_MNAR_RESULTS; run;
+/*Export (this is without interaction)*/
+proc export data=LNRMSSD_MNAR_RESULTS 
+outfile='C:\Users\Ahmed\OneDrive\Documents\Masters\Second_Year\Master Thesis Data Science\Prenatal stress study\data\HRV\lnRMSSD_MNAR_Main_Results.xlsx'
+dbms=xlsx
+replace;
+run;
+
+
+
+proc datasets lib=work nolist;
+  delete lnSDNN_: ;
+quit;
+
+
+/**/
+%run_mnar_outcome(outcome=lnSDNN,  label=lnSDNN,  extra_fx=, covtype=AR(1));
+
+proc export data=LNSDNN_MNAR_RESULTS
+    outfile="C:\Users\Ahmed\OneDrive\Documents\Masters\Second_Year\Master Thesis Data Science\Prenatal stress study\data\HRV\lnSDNN_MNAR_Main_Results.xlsx"
+    dbms=xlsx
+    replace;
+run;
+
+
+
+proc datasets lib=work nolist;
+  delete lnRSA_: ;
+quit;
+
+
+%run_mnar_outcome(outcome=lnRSA,   label=lnRSA,   extra_fx=, covtype=AR(1));
+/* etc. */
+proc export data=LNRSA_MNAR_RESULTS
+    outfile="C:\Users\Ahmed\OneDrive\Documents\Masters\Second_Year\Master Thesis Data Science\Prenatal stress study\data\HRV\lnRSA_MNAR_Main_Results.xlsx"
+    dbms=xlsx
+    replace;
+run;
+
+
+/**/
+
+
+proc datasets lib=work nolist;
+  delete PEP_msec_: ;
+quit;
+
+%run_mnar_outcome(outcome=PEP_msec,   label=PEP_msec,   extra_fx=, covtype=simple);
+proc export data=PEP_msec_MNAR_RESULTS
+    outfile="C:\Users\Ahmed\OneDrive\Documents\Masters\Second_Year\Master Thesis Data Science\Prenatal stress study\data\HRV\PEP_msec_MNAR_Main_Results.xlsx"
+    dbms=xlsx
+    replace;
+run;
+
+
+
+proc datasets lib=work nolist;
+  delete lnHF_: ;
+quit;
+
+
+/*lnHF, try it later*/
+%run_mnar_outcome(outcome=lnHF,   label=lnHF,   extra_fx=REST_VS_STRESS*Gender, covtype=AR(1));
+proc export data=lnHF_MNAR_RESULTS
+    outfile="C:\Users\Ahmed\OneDrive\Documents\Masters\Second_Year\Master Thesis Data Science\Prenatal stress study\data\HRV\lnHF_MNAR_Main_Results(1).xlsx"
+    dbms=xlsx
+    replace;
+run;
+
+%run_mnar_outcome(outcome=lnHF,   label=lnHF,   extra_fx=, covtype=AR(1));
+proc export data=lnHF_MNAR_RESULTS
+    outfile="C:\Users\Ahmed\OneDrive\Documents\Masters\Second_Year\Master Thesis Data Science\Prenatal stress study\data\HRV\lnHF_MNAR_Main_Results(2).xlsx"
+    dbms=xlsx
+    replace;
+run;
+
+
+
+
+/*lnHF after removing REST_VS_STRESS*Gender*/
+
+/*lnLFHF, try it later*/
+%run_mnar_outcome(outcome=lnLFHF,   label=lnLFHF,   extra_fx=REST_VS_STRESS*Gender, covtype=AR(1));
+proc export data=lnLFHF_MNAR_RESULTS
+    outfile="C:\Users\Ahmed\OneDrive\Documents\Masters\Second_Year\Master Thesis Data Science\Prenatal stress study\data\HRV\lnLFHF_MNAR_Main_Results(2).xlsx"
+    dbms=xlsx
+    replace;
+run;
+
+
+
+/*lnLF*/
+%run_mnar_outcome(outcome=lnLF,  label=lnLF,  extra_fx=, covtype=AR(1));
+proc export data=LNLF_MNAR_RESULTS
+    outfile="C:\Users\Ahmed\OneDrive\Documents\Masters\Second_Year\Master Thesis Data Science\Prenatal stress study\data\HRV\lnLF_MNAR_Main_Results.xlsx"
+    dbms=xlsx
+    replace;
+run;
+
+
+
+
+
+
+
 
