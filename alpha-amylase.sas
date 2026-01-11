@@ -779,7 +779,7 @@ run;
 /*11.5 Check Random slope(s) and Residuals Covariance*/
 
 proc mixed data=aas_olsresid;
-  class ID Group0 Gender(ref='m') Sample;
+  class ID Group0(ref='0') gender(ref='m') Sample;
 
   model r_lnCort =;
 
@@ -791,7 +791,7 @@ proc mixed data=aas_olsresid;
 run;
 
 proc mixed data=aas_olsresid;
-  class ID Group0 Gender(ref='m') Sample;
+  class ID Group0(ref='0') gender(ref='m') Sample;
 
   model r_lnCort =;
 
@@ -803,7 +803,7 @@ proc mixed data=aas_olsresid;
 run;
 
 proc mixed data=aas_olsresid;
-  class ID Group0 Gender(ref='m') Sample;
+  class ID Group0(ref='0') gender(ref='m') Sample;
 
   model r_lnCort =;
 
@@ -820,7 +820,7 @@ run;
 /*Reduce the random effects*/
 
 proc mixed data=aas_11_3 nobound method=reml;
-  class ID Group0(ref='0') Gender(ref='m') Sample;
+  class ID Group0(ref='0') gender(ref='m') Sample;
 
 model lnCortisol =
         t_c t_c2 
@@ -839,7 +839,7 @@ run;
 
 /*Not possible, reduce more*/
 proc mixed data=aas_11_3 nobound method=reml;
-  class ID Group0(ref='0') Gender(ref='m') Sample;
+  class ID Group0(ref='0') gender(ref='m') Sample;
 
 model lnCortisol =
         t_c 
@@ -860,7 +860,7 @@ run;
 /*Time slope is extremely small*/
 
 proc mixed data=aas_11_3 nobound method=reml;
-  class ID Group0(ref='0') Gender(ref='m') Sample;
+  class ID Group0(ref='0') gender(ref='m') Sample;
 
 model lnCortisol =
         t_c 
@@ -885,7 +885,7 @@ run;
 /*Final step: Reduction of mean structure (with ML)*/
 
 proc mixed data=aas_11_3 nobound method=ml;
-class ID Group0(ref='0') Gender(ref='m') Sample;
+class ID Group0(ref='0') gender(ref='m') Sample;
 
 model lnCortisol =
         t_c 
@@ -905,7 +905,7 @@ run;
 
 /*Drop Group0*gender*t_c2*/
 proc mixed data=aas_11_3 nobound method=ml;
-class ID Group0(ref='0') Gender(ref='m') Sample;
+class ID Group0(ref='0') gender(ref='m') Sample;
 
 model lnCortisol =
         t_c 
@@ -923,7 +923,7 @@ run;
 
 /*Supported by likelihood test and AIC, drop it safely. Next, drop: t_c*Group0*gender*/
 proc mixed data=aas_11_3 nobound method=ml;
-class ID Group0(ref='0') Gender(ref='m') Sample;
+class ID Group0(ref='0') gender(ref='m') Sample;
 
 model lnCortisol =
         t_c 
@@ -942,7 +942,7 @@ run;
 /*Drop Group0*gender*/
 
 proc mixed data=aas_11_3 nobound method=ml;
-class ID Group0(ref='0') Gender(ref='m') Sample;
+class ID Group0(ref='0') gender(ref='m') Sample;
 
 model lnCortisol =
         t_c 
@@ -958,7 +958,7 @@ run;
 
 /*Drop t_c2*gender*/
 proc mixed data=aas_11_3 nobound method=ml;
-class ID Group0(ref='0') Gender(ref='m') Sample;
+class ID Group0(ref='0') gender(ref='m') Sample;
 
 model lnCortisol =
         t_c 
@@ -974,7 +974,7 @@ run;
 
 /*Drop t_c2*Group0*/
 proc mixed data=aas_11_3 nobound method=ml;
-class ID Group0(ref='0') Gender(ref='m') Sample;
+class ID Group0(ref='0') gender(ref='m') Sample;
 
 model lnCortisol =
         t_c 
@@ -992,7 +992,7 @@ run;
 Now we can go back to original not centered time_from_CPT_min */
 
 proc mixed data=aas_f nobound method=ml;
-class ID Group0(ref='0') Gender(ref='m') Sample;
+class ID Group0(ref='0') gender(ref='m') Sample;
 
 model lnCortisol =
         time_from_CPT_min 
@@ -1008,7 +1008,7 @@ run;
 /*gender*time is highly not significant (no evidence that gender is a moderator), drop it*/
 
 proc mixed data=aas_f nobound method=ml;
-class ID Group0(ref='0') Gender(ref='m') Sample;
+class ID Group0(ref='0') gender(ref='m') Sample;
 
 model lnCortisol =
         time_from_CPT_min 
@@ -1024,7 +1024,7 @@ run;
 
 
 proc mixed data=aas_11_3 nobound method=ml;
-class ID Group0(ref='0') Gender(ref='m') Sample;
+class ID Group0(ref='0') gender(ref='m') Sample;
 
 model lnCortisol =
         t_c 
@@ -1041,7 +1041,7 @@ run;
 
 /*Fit under REML*/
 proc mixed data=aas_f nobound method=reml;
-class ID Group0(ref='0') Gender(ref='m') Sample;
+class ID Group0(ref='0') gender(ref='m') Sample;
 
 model lnCortisol =
         time_from_CPT_min 
@@ -1112,16 +1112,20 @@ proc print data=lnCort_Diag(obs=10); run;
 proc sgplot data=lnCort_Diag;
   scatter x=Pred y=Resid;
   refline 0 / axis=y;
+  title "Model Residuals vs Time for lnCortisol";
 run;
 
 proc univariate data=lnCort_Diag normal;
   var Resid;
   qqplot Resid / normal(mu=est sigma=est);
+  title "QQ plot for lnCortisol Residuals";
+
 run;
 
 proc sgplot data=lnCort_Diag;
   histogram Resid;
   density Resid;
+  title "lnCortisol Residuals Distribution";
 run;
 
 
@@ -1172,17 +1176,17 @@ run;
 
 proc sgplot data=aas_olsresid;
     vbox r_lnAmy / category=gender;
-    title "lnAmy Residual Distribution by Gender";
+    title "lnAmy Residuals Distribution by Gender";
 run;
 
 proc sgplot data=aas_olsresid;
     vbox r_lnAmy / category=Group0;
-    title "lnAmy Residual Distribution by PMA Group";
+    title "lnAmy Residuals Distribution by PMA Group";
 run;
 
 proc sgplot data=aas_olsresid;
     series x=time_from_CPT_min y=r_lnAmy / group=ID transparency=0.8;
-    title "lnAmy Residual Profiles by Subject";
+    title "lnAmy Residuals Profiles by Subject";
 run;
 
 data resvar;
@@ -1199,51 +1203,11 @@ run;
 
 
 
-/*11.5 Check Random slope(s) and Residuals Covariance*/
-
-proc mixed data=aas_olsresid;
-  class ID Group0 Gender(ref='m') Sample;
-
-  model r_lnCort =;
-
-  random intercept t_c t_c2/ subject=ID;
-  repeated Sample / subject=ID type=AR(1);
-
-  ods output FitStatistics=Fit_full
-             Type3=Type3_full;
-run;
-
-proc mixed data=aas_olsresid;
-  class ID Group0 Gender(ref='m') Sample;
-
-  model r_lnCort =;
-
-  random intercept t_c t_c2/ subject=ID;
-  repeated Sample / subject=ID type=simple;
-
-  ods output FitStatistics=Fit_full
-             Type3=Type3_full;
-run;
-
-proc mixed data=aas_olsresid;
-  class ID Group0 Gender(ref='m') Sample;
-
-  model r_lnCort =;
-
-  random intercept t_c t_c2/ subject=ID;
-  repeated Sample / subject=ID type=un;
-
-  ods output FitStatistics=Fit_full
-             Type3=Type3_full;
-run;
-
-/*AR(1) is the chosen residual structure (Also supported by variogram and residual plots)*/
-
 
 /*Reduce the random effects*/
 
 proc mixed data=aas_11_3 nobound method=reml;
-  class ID Group0(ref='0') Gender(ref='m') Sample;
+  class ID Group0(ref='0') gender(ref='m') Sample;
 
 model lnCortisol =
         t_c t_c2 
@@ -1262,7 +1226,7 @@ run;
 
 /*Not possible, reduce more*/
 proc mixed data=aas_11_3 nobound method=reml;
-  class ID Group0(ref='0') Gender(ref='m') Sample;
+  class ID Group0(ref='0') gender(ref='m') Sample;
 
 model lnCortisol =
         t_c 
@@ -1283,7 +1247,7 @@ run;
 /*Time slope is extremely small*/
 
 proc mixed data=aas_11_3 nobound method=reml;
-  class ID Group0(ref='0') Gender(ref='m') Sample;
+  class ID Group0(ref='0') gender(ref='m') Sample;
 
 model lnCortisol =
         t_c 
@@ -1302,4 +1266,1202 @@ run;
 
 /*Both REML log-likelihood test and AIC support reduction to random intercept only*/
 
+
+
+/*11.5 Check Random slope(s) and Residuals Covariance*/
+
+proc mixed data=aas_olsresid;
+  class ID Group0(ref='0') gender(ref='m') Sample;
+
+  model r_lnAmy =;
+
+  random intercept/ subject=ID;
+  repeated / subject=ID type=AR(1);
+
+  ods output FitStatistics=Fit_full
+             Type3=Type3_full;
+run;
+
+proc mixed data=aas_olsresid;
+  class ID Group0(ref='0') gender(ref='m') Sample;
+
+  model r_lnAmy =;
+
+  random intercept / subject=ID;
+  repeated / subject=ID type=simple;
+
+  ods output FitStatistics=Fit_full
+             Type3=Type3_full;
+run;
+
+proc mixed data=aas_olsresid;
+  class ID Group0(ref='0') gender(ref='m') Sample;
+
+  model r_lnAmy =;
+
+  random intercept/ subject=ID;
+  repeated Sample / subject=ID type=CS;
+
+  ods output FitStatistics=Fit_full
+             Type3=Type3_full;
+run;
+
+/*AR(1) is the chosen residual structure (Also supported by variogram and residual plots)*/
 /*So we have: Random intercept model with AR(1) residuals structure*/
+
+
+
+
+
+
+/*Final step: Reduction of mean structure (with ML)*/
+
+proc mixed data=aas_11_3 nobound method=ml;
+class ID Group0(ref='0') gender(ref='m') Sample;
+
+model lnAmy =
+        t_c 
+		t_c2 
+        Group0 gender
+        Group0*t_c gender*t_c
+        Group0*t_c2 gender*t_c2
+        Group0*gender
+        Group0*gender*t_c
+        Group0*gender*t_c2
+        / solution ddfm=kr;
+
+  random intercept/ subject=ID;
+  repeated / subject=ID type=AR(1);
+run;
+
+
+/*Drop Group0*gender*t_c2*/
+proc mixed data=aas_11_3 nobound method=ml;
+class ID Group0(ref='0') gender(ref='m') Sample;
+
+model lnAmy =
+        t_c 
+		t_c2 
+        Group0 gender
+        Group0*t_c gender*t_c
+        Group0*t_c2 gender*t_c2
+        Group0*gender
+        Group0*gender*t_c
+/*        Group0*gender*t_c2*/
+        / solution ddfm=kr;
+
+  random intercept/ subject=ID;
+  repeated / subject=ID type=AR(1);
+run;
+
+/*Supported by likelihood test and AIC, drop it safely. Next, drop: t_c*Group0*gender*/
+proc mixed data=aas_11_3 nobound method=ml;
+class ID Group0(ref='0') gender(ref='m') Sample;
+
+model lnAmy =
+        t_c 
+		t_c2 
+        Group0 gender
+        Group0*t_c gender*t_c
+        Group0*t_c2 gender*t_c2
+        Group0*gender
+/*        Group0*gender*t_c*/
+/*        Group0*gender*t_c2*/
+        / solution ddfm=kr;
+
+  random intercept/ subject=ID;
+  repeated / subject=ID type=AR(1);
+run;
+
+
+/*Drop t_c2*group0*/
+
+proc mixed data=aas_11_3 nobound method=ml;
+class ID Group0(ref='0') gender(ref='m') Sample;
+
+model lnAmy =
+        t_c 
+		t_c2 
+        Group0 gender
+        Group0*t_c gender*t_c
+		gender*t_c2
+        Group0*gender
+/*        Group0*t_c2 */
+/*        Group0*gender*t_c*/
+/*        Group0*gender*t_c2*/
+        / solution ddfm=kr;
+
+  random intercept/ subject=ID;
+  repeated / subject=ID type=AR(1);
+run;
+
+
+/*Drop t_c2*gender*/
+proc mixed data=aas_11_3 nobound method=ml;
+class ID Group0(ref='0') gender(ref='m') Sample;
+
+model lnAmy =
+        t_c 
+		t_c2 
+        Group0 
+		gender
+        Group0*t_c 
+		gender*t_c
+/*		gender*t_c2*/
+        Group0*gender
+/*        Group0*t_c2 */
+/*        Group0*gender*t_c*/
+/*        Group0*gender*t_c2*/
+        / solution ddfm=kr;
+
+  random intercept/ subject=ID;
+  repeated / subject=ID type=AR(1);
+run;
+
+/*Removing tc2*gender makes the model fit worse. Remove t_c*Group0*/
+proc mixed data=aas_11_3 nobound method=ml;
+class ID Group0(ref='0') gender(ref='m') Sample;
+
+model lnAmy =
+        t_c 
+		t_c2 
+        Group0 
+		gender
+/*        Group0*t_c */
+		gender*t_c
+/*		gender*t_c2*/
+        Group0*gender
+/*        Group0*t_c2 */
+/*        Group0*gender*t_c*/
+/*        Group0*gender*t_c2*/
+        / solution ddfm=kr;
+
+  random intercept/ subject=ID;
+  repeated / subject=ID type=AR(1);
+run;
+
+
+
+
+
+
+
+/*Final Model: lnCortisol ~ Gender + time_from_CPT_min*PMA Group*/
+
+/*Fit under REML*/
+proc mixed data=aas_11_3 nobound method=reml;
+class ID Group0(ref='0') gender(ref='m') Sample;
+
+model lnAmy = 
+        t_c 
+		t_c2 
+        Group0 
+		gender
+		gender*t_c
+		gender*t_c2
+        Group0*gender
+        / solution cl ddfm=kr;
+
+  random intercept/ subject=ID;
+  repeated / subject=ID type=AR(1);
+run;
+
+
+
+
+
+
+/*-----------------------
+  	Model Assumptions
+  -----------------------*/
+  proc glimmix data=aas_11_3 nobound method=rspl;
+  class ID Group0(ref='0') gender(ref='m');
+
+ model lnAmy = 
+        t_c 
+		t_c2 
+        Group0 
+		gender
+		gender*t_c
+		gender*t_c2
+        Group0*gender
+        / solution ddfm=kr dist=normal link=identity;
+
+  random intercept / subject=ID;
+
+/*   AR(1) within subject over Time */
+  random _residual_ / subject=ID type=ar(1);
+
+  output out=lnAmy_Diag
+         pred=Pred
+         resid=Resid
+         student=StuResid;
+run;
+proc print data=lnAmy_Diag(obs=10); run;
+
+proc sgplot data=lnAmy_Diag;
+  scatter x=Pred y=Resid;
+  refline 0 / axis=y;
+  title "Model Residuals vs Time for lnAmy";
+run;
+
+proc univariate data=lnAmy_Diag normal;
+  var Resid;
+  qqplot Resid / normal(mu=est sigma=est);
+  title "QQ plot for lnAmy Residuals";
+
+run;
+
+proc sgplot data=lnAmy_Diag;
+  histogram Resid;
+  density Resid;
+  title "lnAmy Residuals Distribution";
+run;
+
+
+
+
+
+/*=================
+	    AACR
+  =================*/
+
+
+/*Preliminary mean structure*/
+
+proc glm data=aas_11_3;
+  class Group0(ref='0') gender(ref='m');
+  model lnAACR =
+        t_c t_c2 
+        Group0 gender
+        Group0*t_c gender*t_c
+        Group0*t_c2 gender*t_c2
+        Group0*gender
+        Group0*gender*t_c
+        Group0*gender*t_c2
+        / solution;
+  output out=aas_olsresid r=r_lnAACR;
+run; quit;
+
+
+proc print data=aas_olsresid(obs=20); run;
+/*Even if the matrix is singular, OLS residuals are still valid. SAS computes residuals with a generalized inverse.
+I am NOT interpreting the estimates, i ONLY need the residuals, so singularity should not be a problem at this stage.*/
+
+
+/*11.4 preliminary r.effects */
+/*Explore Residuals to: 
+? Does variance increase time?
+? Does variance differ by group/gender?
+*/
+
+
+
+proc sgplot data=aas_olsresid;
+    scatter x=time_from_CPT_min y=r_lnAACR / transparency=0.4;
+    loess x=time_from_CPT_min y=r_lnAACR;
+    title "OLS Residuals vs Time for lnAACR";
+run;
+
+proc sgplot data=aas_olsresid;
+    vbox r_lnAACR / category=gender;
+    title "lnAACR Residuals Distribution by Gender";
+run;
+
+proc sgplot data=aas_olsresid;
+    vbox r_lnAACR / category=Group0;
+    title "lnAACR Residuals Distribution by PMA Group";
+run;
+
+proc sgplot data=aas_olsresid;
+    series x=time_from_CPT_min y=r_lnAACR / group=ID transparency=0.8;
+    title "lnAACR Residuals Profiles by Subject";
+run;
+
+data resvar;
+    set aas_olsresid;
+    r2 = r_lnAACR * r_lnAACR;
+run;
+
+proc sgplot data=resvar;
+
+    scatter x=time_from_CPT_min y=r2 / transparency=0.5;
+    loess x=time_from_CPT_min y=r2;
+    title "lnAACR Squared Residuals vs Time from CPT";
+run;
+
+
+
+
+/*Reduce the random effects*/
+
+proc mixed data=aas_11_3 nobound method=reml;
+  class ID Group0(ref='0') gender(ref='m') Sample;
+
+model lnAACR =
+        t_c t_c2 
+        Group0 gender
+        Group0*t_c gender*t_c
+        Group0*t_c2 gender*t_c2
+        Group0*gender
+        Group0*gender*t_c
+        Group0*gender*t_c2
+        / solution ddfm=kr;
+
+  random intercept t_c t_c2/ subject=ID;
+  repeated / subject=ID type=AR(1);
+run;
+
+
+/*Not possible, reduce more*/
+proc mixed data=aas_11_3 nobound method=reml;
+  class ID Group0(ref='0') gender(ref='m') Sample;
+
+model lnAACR =
+        t_c t_c2 
+        Group0 gender
+        Group0*t_c gender*t_c
+        Group0*t_c2 gender*t_c2
+        Group0*gender
+        Group0*gender*t_c
+        Group0*gender*t_c2
+        / solution ddfm=kr;
+
+  random intercept t_c/ subject=ID;
+  repeated / subject=ID type=AR(1);
+run;
+
+
+/*Still*/
+
+proc mixed data=aas_11_3 nobound method=reml;
+  class ID Group0(ref='0') gender(ref='m') Sample;
+
+model lnAACR =
+        t_c t_c2 
+        Group0 gender
+        Group0*t_c gender*t_c
+        Group0*t_c2 gender*t_c2
+        Group0*gender
+        Group0*gender*t_c
+        Group0*gender*t_c2
+        / solution ddfm=kr;
+
+  random intercept/ subject=ID;
+  repeated / subject=ID type=AR(1);
+run;
+
+/*Both REML log-likelihood test and AIC support reduction to random intercept only*/
+
+
+
+/*11.5 Check Random slope(s) and Residuals Covariance*/
+
+proc mixed data=aas_olsresid;
+  class ID Group0(ref='0') gender(ref='m') Sample;
+
+  model r_lnAACR =;
+
+  random intercept/ subject=ID;
+  repeated / subject=ID type=AR(1);
+
+  ods output FitStatistics=Fit_full
+             Type3=Type3_full;
+run;
+
+proc mixed data=aas_olsresid;
+  class ID Group0(ref='0') gender(ref='m') Sample;
+
+  model r_lnAACR =;
+
+  random intercept / subject=ID;
+  repeated / subject=ID type=simple;
+
+  ods output FitStatistics=Fit_full
+             Type3=Type3_full;
+run;
+
+proc mixed data=aas_olsresid;
+  class ID Group0(ref='0') gender(ref='m') Sample;
+
+  model r_lnAACR =;
+
+  random intercept/ subject=ID;
+  repeated Sample / subject=ID type=CS;
+
+  ods output FitStatistics=Fit_full
+             Type3=Type3_full;
+run;
+
+/*AR(1) is the chosen residual structure (Also supported by variogram and residual plots)*/
+/*So we have: Random intercept model with AR(1) residuals structure*/
+
+
+
+
+
+
+
+/*Final step: Reduction of mean structure (with ML)*/
+
+proc mixed data=aas_11_3 nobound method=ml;
+class ID Group0(ref='0') gender(ref='m') Sample;
+
+model lnAACR =
+        t_c 
+		t_c2 
+        Group0 gender
+        Group0*t_c gender*t_c
+        Group0*t_c2 gender*t_c2
+        Group0*gender
+        Group0*gender*t_c
+        Group0*gender*t_c2
+        / solution ddfm=kr;
+
+  random intercept/ subject=ID;
+  repeated / subject=ID type=AR(1);
+run;
+
+
+/*Drop Group0*gender*t_c2*/
+proc mixed data=aas_11_3 nobound method=ml;
+class ID Group0(ref='0') gender(ref='m') Sample;
+
+model lnAACR =
+        t_c 
+		t_c2 
+        Group0 gender
+        Group0*t_c gender*t_c
+        Group0*t_c2 gender*t_c2
+        Group0*gender
+        Group0*gender*t_c
+/*        Group0*gender*t_c2*/
+        / solution ddfm=kr;
+
+  random intercept/ subject=ID;
+  repeated / subject=ID type=AR(1);
+run;
+
+
+/*Drop Group0*gender*t_c*/
+proc mixed data=aas_11_3 nobound method=ml;
+class ID Group0(ref='0') gender(ref='m') Sample;
+
+model lnAACR =
+        t_c 
+		t_c2 
+        Group0 gender
+        Group0*t_c gender*t_c
+        Group0*t_c2 gender*t_c2
+        Group0*gender
+/*        Group0*gender*t_c*/
+/*        Group0*gender*t_c2*/
+        / solution ddfm=kr;
+
+  random intercept/ subject=ID;
+  repeated / subject=ID type=AR(1);
+run;
+
+
+/*Drop t_c2*gender */
+proc mixed data=aas_11_3 nobound method=ml;
+class ID Group0(ref='0') gender(ref='m') Sample;
+
+model lnAACR =
+        t_c 
+		t_c2 
+        Group0 gender
+        Group0*t_c gender*t_c
+        Group0*t_c2 
+/*		gender*t_c2*/
+        Group0*gender
+/*        Group0*gender*t_c*/
+/*        Group0*gender*t_c2*/
+        / solution ddfm=kr;
+
+  random intercept/ subject=ID;
+  repeated / subject=ID type=AR(1);
+run;
+
+
+/*Drop gender*t_c*/
+
+proc mixed data=aas_11_3 nobound method=ml;
+class ID Group0(ref='0') gender(ref='m') Sample;
+
+model lnAACR =
+        t_c 
+		t_c2 
+        Group0 gender
+        Group0*t_c 
+/*		gender*t_c*/
+        Group0*t_c2 
+/*		gender*t_c2*/
+        Group0*gender
+/*        Group0*gender*t_c*/
+/*        Group0*gender*t_c2*/
+        / solution ddfm=kr;
+
+  random intercept/ subject=ID;
+  repeated / subject=ID type=AR(1);
+run;
+
+
+/*Drop Group0*gender*/
+proc mixed data=aas_11_3 nobound method=ml;
+class ID Group0(ref='0') gender(ref='m') Sample;
+
+model lnAACR =
+        t_c 
+		t_c2 
+        Group0 gender
+        Group0*t_c 
+/*		gender*t_c*/
+        Group0*t_c2 
+/*		gender*t_c2*/
+/*        Group0*gender*/
+/*        Group0*gender*t_c*/
+/*        Group0*gender*t_c2*/
+        / solution ddfm=kr;
+
+  random intercept/ subject=ID;
+  repeated / subject=ID type=AR(1);
+run;
+
+/*NO so:*/
+proc mixed data=aas_11_3 nobound method=ml;
+class ID Group0(ref='0') gender(ref='m') Sample;
+
+model lnAACR =
+        t_c 
+		t_c2 
+        Group0 gender
+        Group0*t_c 
+/*		gender*t_c*/
+        Group0*t_c2 
+/*		gender*t_c2*/
+        Group0*gender
+/*        Group0*gender*t_c*/
+/*        Group0*gender*t_c2*/
+        / solution ddfm=kr;
+
+  random intercept/ subject=ID;
+  repeated / subject=ID type=AR(1);
+run;
+
+
+
+/*Final Model: lnAACR ~ time time^2 Group0 gender Group0^time Group*time^2 Group0*gender*/
+
+proc mixed data=aas_11_3 nobound method=reml;
+class ID Group0(ref='0') gender(ref='m') Sample;
+
+model lnAACR =
+        t_c 
+		t_c2 
+        Group0 gender
+        Group0*t_c 
+        Group0*t_c2 
+        Group0*gender
+        / solution cl ddfm=kr;
+
+  random intercept/ subject=ID;
+  repeated / subject=ID type=AR(1);
+run;
+
+
+
+
+/*-----------------------
+  	Model Assumptions
+  -----------------------*/
+  proc glimmix data=aas_11_3 nobound method=rspl;
+  class ID Group0(ref='0') gender(ref='m');
+
+model lnAACR =
+        t_c 
+		t_c2 
+        Group0 gender
+        Group0*t_c 
+        Group0*t_c2 
+        Group0*gender
+        / solution ddfm=kr dist=normal link=identity;
+
+  random intercept / subject=ID;
+
+/*   AR(1) within subject over Time */
+  random _residual_ / subject=ID type=ar(1);
+
+  output out=lnAACR_Diag
+         pred=Pred
+         resid=Resid
+         student=StuResid;
+run;
+proc print data=lnAACR_Diag(obs=10); run;
+
+proc sgplot data=lnAACR_Diag;
+  scatter x=Pred y=Resid;
+  refline 0 / axis=y;
+  title "Model Residuals vs Time for lnAACR";
+run;
+
+proc univariate data=lnAACR_Diag normal;
+  var Resid;
+  qqplot Resid / normal(mu=est sigma=est);
+  title "QQ plot for lnAACR Residuals";
+
+run;
+
+proc sgplot data=lnAACR_Diag;
+  histogram Resid;
+  density Resid;
+  title "lnAACR Residuals Distribution";
+run;
+
+
+
+/*================================================
+			Second model: Metrics data
+  ================================================*/
+
+proc import datafile='C:/Users/Ahmed/OneDrive/Documents/Masters/Second_Year/Master Thesis Data Science/Prenatal stress study/data/Cortisol&AAS/aas_metrics_MI_fromLong.xlsx'
+	out=work.aas_metricsF
+	dbms=xlsx 
+    replace;
+run;
+
+proc contents data=aas_metricsF; run;
+
+proc glm data=aas_metricsF;
+  by _Imputation_;
+  class Group(ref='0') gender(ref='m');
+
+  model lnCort_delta =
+        Group
+        gender
+        Group*gender
+        / solution;
+
+  ods output ParameterEstimates=Delta_Cort_PE;
+run;
+quit;
+
+
+
+data Delta_Cort_PE2;
+  set Delta_Cort_PE;
+  where StdErr ne .;
+
+  length Parameter $40;
+
+  if Effect = 'Group' then Parameter = 'Group_high_vs_lowmed';
+  else if Effect = 'gender' then Parameter = 'Female_vs_male';
+  else if Effect = 'Group*gender' then Parameter = 'Interaction_GroupxGender';
+
+  keep _Imputation_ Parameter Estimate StdErr;
+run;
+
+proc sort data=Delta_Cort_PE2;
+  by Parameter _Imputation_;
+run;
+
+
+proc mianalyze data=Delta_Cort_PE2;
+  by Parameter;
+  modeleffects Estimate;
+  stderr StdErr;
+run;
+
+
+
+
+
+/*================*/
+proc glm data=aas_metricsF;
+  by _Imputation_;
+  class Group(ref='0') gender(ref='m');
+
+  model lnAmy_delta =
+        Group
+        gender
+        Group*gender
+        / solution;
+
+  ods output ParameterEstimates=Delta_Amy_PE;
+run;
+quit;
+
+
+
+data Delta_Amy_PE2;
+  set Delta_Amy_PE;
+  where StdErr ne .;
+
+  length Parameter $40;
+
+  if Effect = 'Group' then Parameter = 'Group_high_vs_lowmed';
+  else if Effect = 'gender' then Parameter = 'Female_vs_male';
+  else if Effect = 'Group*gender' then Parameter = 'Interaction_GroupxGender';
+
+  keep _Imputation_ Parameter Estimate StdErr;
+run;
+
+proc sort data=Delta_Amy_PE2;
+  by Parameter _Imputation_;
+run;
+
+
+proc mianalyze data=Delta_Amy_PE2;
+  by Parameter;
+  modeleffects Estimate;
+  stderr StdErr;
+run;
+
+
+
+
+
+
+
+proc glm data=aas_metricsF;
+  by _Imputation_;
+  class Group(ref='0') gender(ref='m');
+
+  model lnAACR_delta =
+        Group
+        gender
+        Group*gender
+        / solution;
+
+  ods output ParameterEstimates=Delta_AACR_PE;
+run;
+quit;
+
+
+
+data Delta_AACR_PE2;
+  set Delta_AACR_PE;
+  where StdErr ne .;
+
+  length Parameter $40;
+
+  if Effect = 'Group' then Parameter = 'Group_high_vs_lowmed';
+  else if Effect = 'gender' then Parameter = 'Female_vs_male';
+  else if Effect = 'Group*gender' then Parameter = 'Interaction_GroupxGender';
+
+  keep _Imputation_ Parameter Estimate StdErr;
+run;
+
+proc sort data=Delta_AACR_PE2;
+  by Parameter _Imputation_;
+run;
+
+
+proc mianalyze data=Delta_AACR_PE2;
+  by Parameter;
+  modeleffects Estimate;
+  stderr StdErr;
+run;
+
+
+
+/*==============================*/
+proc glm data=aas_metricsF;
+  by _Imputation_;
+  class Group(ref='0') gender(ref='m');
+
+  model slope_lnCort =
+        Group
+        gender
+        Group*gender
+        / solution;
+
+  ods output ParameterEstimates=Slope_Cort_PE;
+run;
+quit;
+
+
+
+data Slope_Cort_PE2;
+  set Slope_Cort_PE;
+  where StdErr ne .;
+
+  length Parameter $40;
+
+  if Effect = 'Group' then Parameter = 'Group_high_vs_lowmed';
+  else if Effect = 'gender' then Parameter = 'Female_vs_male';
+  else if Effect = 'Group*gender' then Parameter = 'Interaction_GroupxGender';
+
+  keep _Imputation_ Parameter Estimate StdErr;
+run;
+
+proc sort data=Slope_Cort_PE2;
+  by Parameter _Imputation_;
+run;
+
+
+proc mianalyze data=Slope_Cort_PE2;
+  by Parameter;
+  modeleffects Estimate;
+  stderr StdErr;
+run;
+
+
+
+
+
+
+proc glm data=aas_metricsF;
+  by _Imputation_;
+  class Group(ref='0') gender(ref='m');
+
+  model slope_lnAmy =
+        Group
+        gender
+        Group*gender
+        / solution;
+
+  ods output ParameterEstimates=Slope_Amy_PE;
+run;
+quit;
+
+
+
+data Slope_Amy_PE2;
+  set Slope_Amy_PE;
+  where StdErr ne .;
+
+  length Parameter $40;
+
+  if Effect = 'Group' then Parameter = 'Group_high_vs_lowmed';
+  else if Effect = 'gender' then Parameter = 'Female_vs_male';
+  else if Effect = 'Group*gender' then Parameter = 'Interaction_GroupxGender';
+
+  keep _Imputation_ Parameter Estimate StdErr;
+run;
+
+proc sort data=Slope_Amy_PE2;
+  by Parameter _Imputation_;
+run;
+
+
+proc mianalyze data=Slope_Amy_PE2;
+  by Parameter;
+  modeleffects Estimate;
+  stderr StdErr;
+run;
+
+
+
+
+
+
+
+
+proc glm data=aas_metricsF;
+  by _Imputation_;
+  class Group(ref='0') gender(ref='m');
+
+  model slope_lnAACR =
+        Group
+        gender
+        Group*gender
+        / solution;
+
+  ods output ParameterEstimates=Slope_AACR_PE;
+run;
+quit;
+
+
+
+data Slope_AACR_PE2;
+  set Slope_AACR_PE;
+  where StdErr ne .;
+
+  length Parameter $40;
+
+  if Effect = 'Group' then Parameter = 'Group_high_vs_lowmed';
+  else if Effect = 'gender' then Parameter = 'Female_vs_male';
+  else if Effect = 'Group*gender' then Parameter = 'Interaction_GroupxGender';
+
+  keep _Imputation_ Parameter Estimate StdErr;
+run;
+
+proc sort data=Slope_AACR_PE2;
+  by Parameter _Imputation_;
+run;
+
+
+proc mianalyze data=Slope_AACR_PE2;
+  by Parameter;
+  modeleffects Estimate;
+  stderr StdErr;
+run;
+
+
+
+/*-----------------------------------------*/
+proc glm data=aas_metricsF;
+  by _Imputation_;
+  class Group(ref='0') gender(ref='m');
+
+  model auc_lnCort =
+        Group
+        gender
+        Group*gender
+        / solution;
+
+  ods output ParameterEstimates=auc_Cort_PE;
+run;
+quit;
+
+
+data auc_Cort_PE2;
+  set auc_Cort_PE;
+  where StdErr ne .;
+
+  length Parameter $40;
+
+  if Effect = 'Group' then Parameter = 'Group_high_vs_lowmed';
+  else if Effect = 'gender' then Parameter = 'Female_vs_male';
+  else if Effect = 'Group*gender' then Parameter = 'Interaction_GroupxGender';
+
+  keep _Imputation_ Parameter Estimate StdErr;
+run;
+
+proc sort data=auc_Cort_PE2;
+  by Parameter _Imputation_;
+run;
+
+
+proc mianalyze data=auc_Cort_PE2;
+  by Parameter;
+  modeleffects Estimate;
+  stderr StdErr;
+run;
+
+
+
+
+
+
+
+proc glm data=aas_metricsF;
+  by _Imputation_;
+  class Group(ref='0') gender(ref='m');
+
+  model auc_lnAmy =
+        Group
+        gender
+        Group*gender
+        / solution;
+
+  ods output ParameterEstimates=auc_Amy_PE;
+run;
+quit;
+
+
+data auc_Amy_PE2;
+  set auc_Amy_PE;
+  where StdErr ne .;
+
+  length Parameter $40;
+
+  if Effect = 'Group' then Parameter = 'Group_high_vs_lowmed';
+  else if Effect = 'gender' then Parameter = 'Female_vs_male';
+  else if Effect = 'Group*gender' then Parameter = 'Interaction_GroupxGender';
+
+  keep _Imputation_ Parameter Estimate StdErr;
+run;
+
+proc sort data=auc_Amy_PE2;
+  by Parameter _Imputation_;
+run;
+
+
+proc mianalyze data=auc_Amy_PE2;
+  by Parameter;
+  modeleffects Estimate;
+  stderr StdErr;
+run;
+
+
+
+
+
+
+
+proc glm data=aas_metricsF;
+  by _Imputation_;
+  class Group(ref='0') gender(ref='m');
+
+  model auc_lnAACR =
+        Group
+        gender
+        Group*gender
+        / solution;
+
+  ods output ParameterEstimates=auc_AACR_PE;
+run;
+quit;
+
+
+data auc_AACR_PE2;
+  set auc_AACR_PE;
+  where StdErr ne .;
+
+  length Parameter $40;
+
+  if Effect = 'Group' then Parameter = 'Group_high_vs_lowmed';
+  else if Effect = 'gender' then Parameter = 'Female_vs_male';
+  else if Effect = 'Group*gender' then Parameter = 'Interaction_GroupxGender';
+
+  keep _Imputation_ Parameter Estimate StdErr;
+run;
+
+proc sort data=auc_AACR_PE2;
+  by Parameter _Imputation_;
+run;
+
+
+proc mianalyze data=auc_AACR_PE2;
+  by Parameter;
+  modeleffects Estimate;
+  stderr StdErr;
+run;
+
+
+
+
+/*--------------------------------*/
+proc glm data=aas_metricsF;
+  by _Imputation_;
+  class Group(ref='0') gender(ref='m');
+
+  model lnCort_peak =
+        Group
+        gender
+        Group*gender
+        / solution;
+
+  ods output ParameterEstimates=peak_Cort_PE;
+run;
+quit;
+
+
+data peak_Cort_PE2;
+  set peak_Cort_PE;
+  where StdErr ne .;
+
+  length Parameter $40;
+
+  if Effect = 'Group' then Parameter = 'Group_high_vs_lowmed';
+  else if Effect = 'gender' then Parameter = 'Female_vs_male';
+  else if Effect = 'Group*gender' then Parameter = 'Interaction_GroupxGender';
+
+  keep _Imputation_ Parameter Estimate StdErr;
+run;
+
+proc sort data=peak_Cort_PE2;
+  by Parameter _Imputation_;
+run;
+
+
+proc mianalyze data=peak_Cort_PE2;
+  by Parameter;
+  modeleffects Estimate;
+  stderr StdErr;
+run;
+
+
+
+
+proc glm data=aas_metricsF;
+  by _Imputation_;
+  class Group(ref='0') gender(ref='m');
+
+  model lnAmy_peak =
+        Group
+        gender
+        Group*gender
+        / solution;
+
+  ods output ParameterEstimates=peak_Amy_PE;
+run;
+quit;
+
+
+data peak_Amy_PE2;
+  set peak_Amy_PE;
+  where StdErr ne .;
+
+  length Parameter $40;
+
+  if Effect = 'Group' then Parameter = 'Group_high_vs_lowmed';
+  else if Effect = 'gender' then Parameter = 'Female_vs_male';
+  else if Effect = 'Group*gender' then Parameter = 'Interaction_GroupxGender';
+
+  keep _Imputation_ Parameter Estimate StdErr;
+run;
+
+proc sort data=peak_Amy_PE2;
+  by Parameter _Imputation_;
+run;
+
+
+proc mianalyze data=peak_Amy_PE2;
+  by Parameter;
+  modeleffects Estimate;
+  stderr StdErr;
+run;
+
+
+
+
+
+proc glm data=aas_metricsF;
+  by _Imputation_;
+  class Group(ref='0') gender(ref='m');
+
+  model lnAACR_peak =
+        Group
+        gender
+        Group*gender
+        / solution;
+
+  ods output ParameterEstimates=peak_AACR_PE;
+run;
+quit;
+
+
+data peak_AACR_PE2;
+  set peak_AACR_PE;
+  where StdErr ne .;
+
+  length Parameter $40;
+
+  if Effect = 'Group' then Parameter = 'Group_high_vs_lowmed';
+  else if Effect = 'gender' then Parameter = 'Female_vs_male';
+  else if Effect = 'Group*gender' then Parameter = 'Interaction_GroupxGender';
+
+  keep _Imputation_ Parameter Estimate StdErr;
+run;
+
+proc sort data=peak_AACR_PE2;
+  by Parameter _Imputation_;
+run;
+
+
+proc mianalyze data=peak_AACR_PE2;
+  by Parameter;
+  modeleffects Estimate;
+  stderr StdErr;
+run;
+
+
+
+
+
+
+
+
