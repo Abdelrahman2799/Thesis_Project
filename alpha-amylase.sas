@@ -1,25 +1,16 @@
-/* Step 1: Set the library path where the .sas7bdat file is stored */
-/*libname mydata 'D:/Masters/Second_Year/Master Thesis Data Science/Prenatal stress study/data/Cortisol&AAS/';*/
 
-proc datasets lib=mydata;
-run;
+/* ============================================================
+   Salivary Alpha-Amylase and AACR Analyses
+   Longitudinal Models, Summary Metrics, and Sensitivity Analyses
 
-DATA aas;
-    SET mydata.LAST_CORTISOLAMYLASE;
-RUN;
+   This script reproduces all analyses reported for salivary
+   alpha-amylase and the alpha-amylase-to-cortisol ratio.
+   Paths are omitted for portability.
+   ============================================================ */
 
-proc contents data=aas;
-run;
+/* 1. Data import and preprocessing */
 
-DATA aas_clean;
-    SET aas;
-    DROP firstnam surname birthday ;
-RUN;
-
-proc means data=aas_clean NMISS N; run;
-
-
-proc import datafile='C:/Users/Ahmed/OneDrive/Documents/Masters/Second_Year/Master Thesis Data Science/Prenatal stress study/data/Cortisol&AAS/aas_namesremoved.xlsx'
+proc import datafile='.../aas_namesremoved.xlsx'
 	out=work.aas_data
 	dbms=xlsx 
     replace;
@@ -27,6 +18,7 @@ run;
 
 proc contents data=aas_data; run;
 
+/*QC*/
 proc means data=aas_data n nmiss;
   var Amylase1 Amylase2 Amylase3 Amylase4 Amylase5 Amylase6 Amylase7 Amylase8 
 	  Cortisol1 Cortisol2 Cortisol3 Cortisol4 Cortisol5 Cortisol6 Cortisol7 Cortisol8 
@@ -36,7 +28,7 @@ run;
 
 
 
-/*First: Change 999 to .*/
+/*First: replace 999(how missingness were coded by the lab) by .*/
 data aas_clean;
   set aas_data;
 
@@ -52,6 +44,8 @@ data aas_clean;
   drop i;
 run;
 
+/*Check again*/
+
 proc means data=aas_clean n nmiss min max;
   var Amylase1 Amylase2 Amylase3 Amylase4 Amylase5 Amylase6 Amylase7 Amylase8 
 	  Cortisol1 Cortisol2 Cortisol3 Cortisol4 Cortisol5 Cortisol6 Cortisol7 Cortisol8 
@@ -59,6 +53,7 @@ proc means data=aas_clean n nmiss min max;
 	  AmyOVERcort1 AmyOVERcort2 AmyOVERcort3 AmyOVERcort4 AmyOVERcort5 AmyOVERcort6 AmyOVERcort7 AmyOVERcort8;
 run;
 
+/*Construct the log transformed variables for only plausible values, otherwise = missing*/
 data aas_wide_ln;
   set aas_clean;
 
@@ -80,13 +75,14 @@ data aas_wide_ln;
   drop i;
 run;
 
-
+/*Relabel the low PMA group to 0 instead of 2*/
 data aas_wide_ln;
   set aas_wide_ln;
 
   if Group = 2 then Group = 0;
 run;
 
+/*reshape*/
 data aas_long;
   set aas_wide_ln;
 
@@ -110,7 +106,8 @@ proc sort data=aas_long;
   by ID Sample;
 run;
 
-proc import datafile="C:/Users/Ahmed/OneDrive/Documents/Masters/Second_Year/Master Thesis Data Science/Prenatal stress study/data/Cortisol&AAS/brainage_saliva_samples_times on stickers.xlsx"
+/*Import the stickers file to extract the samples timings*/
+proc import datafile="..../brainage_saliva_samples_times on stickers.xlsx"
     out=stick_raw
     dbms=xlsx
     replace;
@@ -175,185 +172,18 @@ proc print data=aas_long_time(obs=40); run;
 
 
 
-proc export data=aas_log
-	outfile='C:/Users/Ahmed/OneDrive/Documents/Masters/Second_Year/Master Thesis Data Science/Prenatal stress study/data/Cortisol&AAS/aas_pre_impute.xlsx'
-	dbms=xlsx 
-    replace;
-run;
-
-proc import datafile='C:/Users/Ahmed/OneDrive/Documents/Masters/Second_Year/Master Thesis Data Science/Prenatal stress study/data/Cortisol&AAS/aas_pre_impute.xlsx'
-	dbms=xlsx
-	out=work.aas_pre_impute 
-    replace;
-run;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-ods excel file="C:\Users\Ahmed\OneDrive\Documents\Masters\Second_Year\Master Thesis Data Science\Prenatal stress study\data\Cortisol&AAS\AAS_MI_Results_FCS_LN.xlsx"
-          options(sheet_name="MI_FCS" embedded_titles='yes');
-
-proc mi data=aas_pre_impute out=aas_imputed_ln seed=54321 nimpute=10;
-  class gender Group;
-
-  fcs regpmm;
-
-  var
-    gender Group
-    lnAmy1 lnAmy2 lnAmy3 lnAmy4 lnAmy5 lnAmy6 lnAmy7 lnAmy8
-    lnCort1 lnCort2 lnCort3 lnCort4 lnCort5 lnCort6 lnCort7 lnCort8;
-run;
-
-
-proc means data=aas_imputed_ln n nmiss min max;
-var lnAmy1 lnAmy2 lnAmy3 lnAmy4 lnAmy5 lnAmy6 lnAmy7 lnAmy8
-    lnCort1 lnCort2 lnCort3 lnCort4 lnCort5 lnCort6 lnCort7 lnCort8;
-run;
-
-/*169 is fully missing*/
-proc print data=aas_imputed_ln;
-where ID = 169; run;
-
-data aas_imputed_ln;
-  set aas_imputed_ln;
-  if ID = 169 then delete;
-run;
-
-/*Check again*/
-proc means data=aas_imputed_ln n nmiss min max;
-var lnAmy1 lnAmy2 lnAmy3 lnAmy4 lnAmy5 lnAmy6 lnAmy7 lnAmy8
-    lnCort1 lnCort2 lnCort3 lnCort4 lnCort5 lnCort6 lnCort7 lnCort8;
-run;
-
-
-/*Recalculate lnAACR 1-8*/
-data aas_imputed_ln;
-  set aas_imputed_ln;
-  array amy[8] lnAmy1 lnAmy2 lnAmy3 lnAmy4 lnAmy5 lnAmy6 lnAmy7 lnAmy8;
-  array cort[8] lnCort1 lnCort2 lnCort3 lnCort4 lnCort5 lnCort6 lnCort7 lnCort8;
-  array aacr[8] lnAACR_1 lnAACR_2 lnAACR_3 lnAACR_4 lnAACR_5 lnAACR_6 lnAACR_7 lnAACR_8;
-
-  do i = 1 to 8;
-    if amy[i] ne . and cort[i] ne . then aacr[i] = amy[i] - cort[i];
-  end;
-
-  drop i;
-run;
-
-/*Check for the last time before reshaping*/
-proc means data=aas_imputed_ln n nmiss min max;
-var lnAmy1 lnAmy2 lnAmy3 lnAmy4 lnAmy5 lnAmy6 lnAmy7 lnAmy8
-    lnCort1 lnCort2 lnCort3 lnCort4 lnCort5 lnCort6 lnCort7 lnCort8
-	lnAACR_1 lnAACR_2 lnAACR_3 lnAACR_4 lnAACR_5 lnAACR_6 lnAACR_7 lnAACR_8;
-run;
-
-/*Reshape to long format*/
-data aas_long;
-  set aas_imputed_ln;
-
-  array amy[8] lnAmy1 lnAmy2 lnAmy3 lnAmy4 lnAmy5 lnAmy6 lnAmy7 lnAmy8;
-  array cort[8] lnCort1 lnCort2 lnCort3 lnCort4 lnCort5 lnCort6 lnCort7 lnCort8;
-  array aacr[8] lnAACR_1 lnAACR_2 lnAACR_3 lnAACR_4 lnAACR_5 lnAACR_6 lnAACR_7 lnAACR_8;
-
-  do Sample = 1 to 8;
-    lnAmy = amy[Sample];
-    lnCort = cort[Sample];
-    lnAACR = aacr[Sample];
-
-	/*Assume: Rest = sample 1 and 2, Stress = 3-4, Recovery = 5-8*/
-
-	if Sample in (1, 2) then Phase = "Rest";
-	else if Sample in (3, 4) then Phase = "Stress";
-	else Phase = "Recovery";
-
-    output;
-  end;
-
-  keep ID gender Group Phase _Imputation_ Sample lnAmy lnCort lnAACR;
-run;
-
-
-proc contents data=aas_long; run;
-
-proc print data=aas_long(obs=20);run;
-
-proc means data=aas_long n nmiss min mean median max; run; 
-
-
-proc print data=aas_long;
-var ID _Imputation_ gender Group;
-where ID in (118, 120, 121);
-run;
-
-/*Since original data did not have gender recorded for IDs 118, 120 and 121; the model imputed these values. However, they are all females*/
-data aas_long;
-  set aas_long;
-
-  if ID in (118, 120, 121) then Gender = "f";
-run;
-
-proc print data=aas_long;
-var ID _Imputation_ gender Group;
-where ID in (118, 120, 121);
-run;
-
-/*Also, in HRV data, groups are coded as follows: 0 for low, 1 for high group. However here: 1 for high, 2 for low! change to 0 = low, 1=high */
-data aas_long;
-  set aas_long;
-  if Group = 2 then Group = 0;
-run;
-
-
-proc export data=aas_long 
-	outfile='C:/Users/Ahmed/OneDrive/Documents/Masters/Second_Year/Master Thesis Data Science/Prenatal stress study/data/Cortisol&AAS/aas_long_FcsImputed.xlsx'
-	dbms=xlsx 
-    replace;
-run;
-
-
-
-proc import datafile='C:/Users/Ahmed/OneDrive/Documents/Masters/Second_Year/Master Thesis Data Science/Prenatal stress study/data/Cortisol&AAS/aas_long_FcsImputed.xlsx'
-	dbms=xlsx
-	out=work.aas_long 
-    replace;
-run;
-
-proc contents data=aas_long; run;
-
-
-
 /*###################################################################################################
 										Merging datasets
 	For each imputed observation, attach the real-world time at which that saliva sample was taken
   ###################################################################################################*/
-proc import datafile='C:/Users/Ahmed/OneDrive/Documents/Masters/Second_Year/Master Thesis Data Science/Prenatal stress study/data/Cortisol&AAS/aas_long_prepared_with_times_FIXED.xlsx'
+proc import datafile='.../aas_long_prepared_with_times_FIXED.xlsx'
 	dbms=xlsx
 	out=work.aas_long_prepared 
     replace;
 run;
 
 
-proc import datafile="C:/Users/Ahmed/OneDrive/Documents/Masters/Second_Year/Master Thesis Data Science/Prenatal stress study/data/Cortisol&AAS/aas_metrics_log.xlsx"
+proc import datafile=".../aas_metrics_log.xlsx"
     out=metrics
     dbms=xlsx
     replace;
@@ -412,7 +242,7 @@ run;
 proc print data=metrics_with_cov(obs=20); run;
 
 proc export data=metrics_with_cov 
-	outfile='C:/Users/Ahmed/OneDrive/Documents/Masters/Second_Year/Master Thesis Data Science/Prenatal stress study/data/Cortisol&AAS/aas_metricsF.xlsx'
+	outfile='.../aas_metricsF.xlsx'
 	dbms=xlsx 
     replace;
 run;
@@ -422,7 +252,7 @@ run;
 
 
 /*Add lnAARC in both datasets*/
-proc import datafile='C:/Users/Ahmed/OneDrive/Documents/Masters/Second_Year/Master Thesis Data Science/Prenatal stress study/data/Cortisol&AAS/aas_long_prepared_with_times_FIXED.xlsx'
+proc import datafile='.../aas_long_prepared_with_times_FIXED.xlsx'
 	dbms=xlsx
 	out=work.aas_long_prepared 
     replace;
@@ -437,7 +267,7 @@ run;
 
 
 
-proc import datafile="C:/Users/Ahmed/OneDrive/Documents/Masters/Second_Year/Master Thesis Data Science/Prenatal stress study/data/Cortisol&AAS/aas_metricsF.xlsx"
+proc import datafile="C.../aas_metricsF.xlsx"
     out=metrics
     dbms=xlsx
     replace;
@@ -657,21 +487,21 @@ run; quit;
 
 
 proc export data=metrics 
-	outfile='C:/Users/Ahmed/OneDrive/Documents/Masters/Second_Year/Master Thesis Data Science/Prenatal stress study/data/Cortisol&AAS/aas_metricsF.xlsx'
+	outfile='.../aas_metricsF.xlsx'
 	dbms=xlsx 
     replace;
 run;
 
 
 proc export data=aas_long_prepared 
-	outfile='C:/Users/Ahmed/OneDrive/Documents/Masters/Second_Year/Master Thesis Data Science/Prenatal stress study/data/Cortisol&AAS/aas_long_prepared_with_times_FIXED.xlsx'
+	outfile='.../aas_long_prepared_with_times_FIXED.xlsx'
 	dbms=xlsx 
     replace;
 run;
 
 
 
-proc import datafile="C:/Users/Ahmed/OneDrive/Documents/Masters/Second_Year/Master Thesis Data Science/Prenatal stress study/data/Cortisol&AAS/aas_CPTmodel_prepared_observed.xlsx"
+proc import datafile=".../aas_CPTmodel_prepared_observed.xlsx"
     out=aas_f
     dbms=xlsx
     replace;
@@ -1618,7 +1448,7 @@ run;
 
 
 
-/*Final Model: lnAmy ~ centered time_from_CPT_min + centered time_from_CPT_min^2*PMA Group + centered time_from_CPT_min^2*Gender */
+/*Final Model: lnAmy ~ centered time_from_CPT_min + centered time_from_CPT_min^2*PMA Group + centered time_from_CPT_min^2*Gender + PMA Group*gender*/
 
 /*Fit under REML*/
 proc mixed data=aas_11_3 nobound method=reml;
@@ -1770,8 +1600,6 @@ proc glm data=aas_11_3;
         Group0*t_c gender*t_c
         Group0*t_c2 gender*t_c2
         Group0*gender
-        Group0*gender*t_c
-        Group0*gender*t_c2
         / solution;
   output out=aas_olsresid r=r_lnAACR;
 run; quit;
@@ -1837,8 +1665,6 @@ model lnAACR =
         Group0*t_c gender*t_c
         Group0*t_c2 gender*t_c2
         Group0*gender
-        Group0*gender*t_c
-        Group0*gender*t_c2
         / solution ddfm=kr;
 
   random intercept t_c t_c2/ subject=ID;
@@ -1856,8 +1682,6 @@ model lnAACR =
         Group0*t_c gender*t_c
         Group0*t_c2 gender*t_c2
         Group0*gender
-        Group0*gender*t_c
-        Group0*gender*t_c2
         / solution ddfm=kr;
 
   random intercept t_c/ subject=ID;
@@ -1876,8 +1700,6 @@ model lnAACR =
         Group0*t_c gender*t_c
         Group0*t_c2 gender*t_c2
         Group0*gender
-        Group0*gender*t_c
-        Group0*gender*t_c2
         / solution ddfm=kr;
 
   random intercept/ subject=ID;
@@ -1947,8 +1769,6 @@ model lnAACR =
         Group0*t_c gender*t_c
         Group0*t_c2 gender*t_c2
         Group0*gender
-        Group0*gender*t_c
-        Group0*gender*t_c2
         / solution ddfm=kr;
 
   random intercept/ subject=ID;
@@ -1956,7 +1776,27 @@ model lnAACR =
 run;
 
 
-/*Drop Group0*gender*t_c2*/
+
+/*Drop both t_c2*group0 and t_c2*gender */
+proc mixed data=aas_11_3 nobound method=ml;
+class ID Group0(ref='0') gender(ref='m') Sample;
+
+model lnAACR =
+        t_c 
+		t_c2 
+        Group0 gender
+        Group0*t_c gender*t_c
+/*        Group0*t_c2 */
+/*		gender*t_c2*/
+        Group0*gender
+        / solution ddfm=kr;
+
+  random intercept/ subject=ID;
+  repeated / subject=ID type=AR(1);
+run;
+
+/*LR = 516.1 - 510.2 = 5.9 with df=2, so p about 0.052, and AIC worsend, so keep them*/
+/*So we are here:*/
 proc mixed data=aas_11_3 nobound method=ml;
 class ID Group0(ref='0') gender(ref='m') Sample;
 
@@ -1967,8 +1807,6 @@ model lnAACR =
         Group0*t_c gender*t_c
         Group0*t_c2 gender*t_c2
         Group0*gender
-        Group0*gender*t_c
-/*        Group0*gender*t_c2*/
         / solution ddfm=kr;
 
   random intercept/ subject=ID;
@@ -1976,7 +1814,8 @@ model lnAACR =
 run;
 
 
-/*Drop Group0*gender*t_c*/
+/*Drop first order time interactions both group*t_c and gender*t_c*/
+
 proc mixed data=aas_11_3 nobound method=ml;
 class ID Group0(ref='0') gender(ref='m') Sample;
 
@@ -1984,11 +1823,9 @@ model lnAACR =
         t_c 
 		t_c2 
         Group0 gender
-        Group0*t_c gender*t_c
+/*        Group0*t_c gender*t_c*/
         Group0*t_c2 gender*t_c2
         Group0*gender
-/*        Group0*gender*t_c*/
-/*        Group0*gender*t_c2*/
         / solution ddfm=kr;
 
   random intercept/ subject=ID;
@@ -1996,7 +1833,7 @@ model lnAACR =
 run;
 
 
-/*Drop t_c2*gender */
+/*Drop Group0xgender*/
 proc mixed data=aas_11_3 nobound method=ml;
 class ID Group0(ref='0') gender(ref='m') Sample;
 
@@ -2004,64 +1841,15 @@ model lnAACR =
         t_c 
 		t_c2 
         Group0 gender
-        Group0*t_c gender*t_c
-        Group0*t_c2 
-/*		gender*t_c2*/
-        Group0*gender
-/*        Group0*gender*t_c*/
-/*        Group0*gender*t_c2*/
-        / solution ddfm=kr;
-
-  random intercept/ subject=ID;
-  repeated / subject=ID type=AR(1);
-run;
-
-
-/*Drop gender*t_c*/
-
-proc mixed data=aas_11_3 nobound method=ml;
-class ID Group0(ref='0') gender(ref='m') Sample;
-
-model lnAACR =
-        t_c 
-		t_c2 
-        Group0 gender
-        Group0*t_c 
-/*		gender*t_c*/
-        Group0*t_c2 
-/*		gender*t_c2*/
-        Group0*gender
-/*        Group0*gender*t_c*/
-/*        Group0*gender*t_c2*/
-        / solution ddfm=kr;
-
-  random intercept/ subject=ID;
-  repeated / subject=ID type=AR(1);
-run;
-
-
-/*Drop Group0*gender*/
-proc mixed data=aas_11_3 nobound method=ml;
-class ID Group0(ref='0') gender(ref='m') Sample;
-
-model lnAACR =
-        t_c 
-		t_c2 
-        Group0 gender
-        Group0*t_c 
-/*		gender*t_c*/
-        Group0*t_c2 
-/*		gender*t_c2*/
+        Group0*t_c2 gender*t_c2
 /*        Group0*gender*/
-/*        Group0*gender*t_c*/
-/*        Group0*gender*t_c2*/
         / solution ddfm=kr;
 
   random intercept/ subject=ID;
   repeated / subject=ID type=AR(1);
 run;
 
-/*NO so:*/
+/*Nop. So we are here*/
 proc mixed data=aas_11_3 nobound method=ml;
 class ID Group0(ref='0') gender(ref='m') Sample;
 
@@ -2069,13 +1857,9 @@ model lnAACR =
         t_c 
 		t_c2 
         Group0 gender
-        Group0*t_c 
-/*		gender*t_c*/
-        Group0*t_c2 
-/*		gender*t_c2*/
+/*        Group0*t_c gender*t_c*/
+        Group0*t_c2 gender*t_c2
         Group0*gender
-/*        Group0*gender*t_c*/
-/*        Group0*gender*t_c2*/
         / solution ddfm=kr;
 
   random intercept/ subject=ID;
@@ -2084,18 +1868,18 @@ run;
 
 
 
-/*Final Model: lnAACR ~ time time^2 Group0 gender Group0^time Group*time^2 Group0*gender*/
+/*Final Model: lnAACR ~ centered time_from_CPT_min + centered time_from_CPT_min*gender + centered time_from_CPT_min* PMA group + PMAgroupxgender */
 
 proc mixed data=aas_11_3 nobound method=reml;
 class ID Group0(ref='0') gender(ref='m') Sample;
 
 model lnAACR =
-        t_c 
-		t_c2 
+        t_c
+        t_c2
         Group0 gender
-        Group0*t_c 
-        Group0*t_c2 
         Group0*gender
+        t_c2*Group0
+        t_c2*gender
         / solution cl ddfm=kr;
 
   random intercept/ subject=ID;
@@ -2103,21 +1887,82 @@ model lnAACR =
 run;
 
 
+/*Run on the excluded data*/
+proc mixed data=aas_11_3_noex nobound method=reml;
+class ID Group0(ref='0') gender(ref='m') Sample;
+
+model lnAACR =
+        t_c
+        t_c2
+        Group0 gender
+        Group0*gender
+        t_c2*Group0
+        t_c2*gender
+        / solution cl ddfm=kr;
+
+  random intercept/ subject=ID;
+  repeated / subject=ID type=AR(1);
+run;
 
 
 /*-----------------------
   	Model Assumptions
   -----------------------*/
   proc glimmix data=aas_11_3 nobound method=rspl;
-  class ID Group0(ref='0') gender(ref='m');
+  class ID Group0(ref='0') gender(ref='m') Sample;
 
 model lnAACR =
-        t_c 
-		t_c2 
+        t_c
+        t_c2
         Group0 gender
-        Group0*t_c 
-        Group0*t_c2 
         Group0*gender
+        t_c2*Group0
+        t_c2*gender
+        / solution ddfm=kr dist=normal link=identity;
+
+  random intercept / subject=ID;
+
+/*   AR(1) within subject over Time */
+  random _residual_ / subject=ID type=ar(1);
+
+  output out=lnAACR_Diag
+         pred=Pred
+         resid=Resid
+         student=StuResid;
+run;
+proc print data=lnAACR_Diag(obs=10); run;
+
+proc sgplot data=lnAACR_Diag;
+  scatter x=Pred y=Resid;
+  refline 0 / axis=y;
+  title "Model Residuals vs Time for lnAACR";
+run;
+
+proc univariate data=lnAACR_Diag normal;
+  var Resid;
+  qqplot Resid / normal(mu=est sigma=est);
+  title "QQ plot for lnAACR Residuals";
+
+run;
+
+proc sgplot data=lnAACR_Diag;
+  histogram Resid;
+  density Resid;
+  title "lnAACR Residuals Distribution";
+run;
+
+
+/*Check assumptions with noextreme*/
+proc glimmix data=aas_11_3_noex nobound method=rspl;
+  class ID Group0(ref='0') gender(ref='m') Sample;
+
+model lnAACR =
+        t_c
+        t_c2
+        Group0 gender
+        Group0*gender
+        t_c2*Group0
+        t_c2*gender
         / solution ddfm=kr dist=normal link=identity;
 
   random intercept / subject=ID;
@@ -2153,11 +1998,12 @@ run;
 
 
 
+
 /*================================================
 			Second model: Metrics data
   ================================================*/
 
-proc import datafile='C:/Users/Ahmed/OneDrive/Documents/Masters/Second_Year/Master Thesis Data Science/Prenatal stress study/data/Cortisol&AAS/aas_metrics_MI_fromLong.xlsx'
+proc import datafile='.../aas_metrics_MI_fromLong.xlsx'
 	out=work.aas_metricsF
 	dbms=xlsx 
     replace;
@@ -2172,7 +2018,7 @@ proc glm data=aas_metricsF;
   model lnCort_delta =
         Group
         gender
-        Group*gender
+/*        Group*gender*/
         / solution;
 
   ods output ParameterEstimates=Delta_Cort_PE;
@@ -2189,7 +2035,7 @@ data Delta_Cort_PE2;
 
   if Effect = 'Group' then Parameter = 'Group_high_vs_lowmed';
   else if Effect = 'gender' then Parameter = 'Female_vs_male';
-  else if Effect = 'Group*gender' then Parameter = 'Interaction_GroupxGender';
+/*  else if Effect = 'Group*gender' then Parameter = 'Interaction_GroupxGender';*/
 
   keep _Imputation_ Parameter Estimate StdErr;
 run;
@@ -2217,7 +2063,7 @@ proc glm data=aas_metricsF;
   model lnAmy_delta =
         Group
         gender
-        Group*gender
+/*        Group*gender*/
         / solution;
 
   ods output ParameterEstimates=Delta_Amy_PE;
@@ -2234,7 +2080,7 @@ data Delta_Amy_PE2;
 
   if Effect = 'Group' then Parameter = 'Group_high_vs_lowmed';
   else if Effect = 'gender' then Parameter = 'Female_vs_male';
-  else if Effect = 'Group*gender' then Parameter = 'Interaction_GroupxGender';
+/*  else if Effect = 'Group*gender' then Parameter = 'Interaction_GroupxGender';*/
 
   keep _Imputation_ Parameter Estimate StdErr;
 run;
@@ -2263,7 +2109,7 @@ proc glm data=aas_metricsF;
   model lnAACR_delta =
         Group
         gender
-        Group*gender
+/*        Group*gender*/
         / solution;
 
   ods output ParameterEstimates=Delta_AACR_PE;
@@ -2280,7 +2126,7 @@ data Delta_AACR_PE2;
 
   if Effect = 'Group' then Parameter = 'Group_high_vs_lowmed';
   else if Effect = 'gender' then Parameter = 'Female_vs_male';
-  else if Effect = 'Group*gender' then Parameter = 'Interaction_GroupxGender';
+/*  else if Effect = 'Group*gender' then Parameter = 'Interaction_GroupxGender';*/
 
   keep _Imputation_ Parameter Estimate StdErr;
 run;
@@ -2298,6 +2144,10 @@ run;
 
 
 
+
+
+
+
 /*==============================*/
 proc glm data=aas_metricsF;
   by _Imputation_;
@@ -2306,7 +2156,7 @@ proc glm data=aas_metricsF;
   model slope_lnCort =
         Group
         gender
-        Group*gender
+/*        Group*gender*/
         / solution;
 
   ods output ParameterEstimates=Slope_Cort_PE;
@@ -2323,7 +2173,7 @@ data Slope_Cort_PE2;
 
   if Effect = 'Group' then Parameter = 'Group_high_vs_lowmed';
   else if Effect = 'gender' then Parameter = 'Female_vs_male';
-  else if Effect = 'Group*gender' then Parameter = 'Interaction_GroupxGender';
+/*  else if Effect = 'Group*gender' then Parameter = 'Interaction_GroupxGender';*/
 
   keep _Imputation_ Parameter Estimate StdErr;
 run;
@@ -2351,7 +2201,7 @@ proc glm data=aas_metricsF;
   model slope_lnAmy =
         Group
         gender
-        Group*gender
+/*        Group*gender*/
         / solution;
 
   ods output ParameterEstimates=Slope_Amy_PE;
@@ -2368,7 +2218,7 @@ data Slope_Amy_PE2;
 
   if Effect = 'Group' then Parameter = 'Group_high_vs_lowmed';
   else if Effect = 'gender' then Parameter = 'Female_vs_male';
-  else if Effect = 'Group*gender' then Parameter = 'Interaction_GroupxGender';
+/*  else if Effect = 'Group*gender' then Parameter = 'Interaction_GroupxGender';*/
 
   keep _Imputation_ Parameter Estimate StdErr;
 run;
@@ -2398,7 +2248,7 @@ proc glm data=aas_metricsF;
   model slope_lnAACR =
         Group
         gender
-        Group*gender
+/*        Group*gender*/
         / solution;
 
   ods output ParameterEstimates=Slope_AACR_PE;
@@ -2415,7 +2265,7 @@ data Slope_AACR_PE2;
 
   if Effect = 'Group' then Parameter = 'Group_high_vs_lowmed';
   else if Effect = 'gender' then Parameter = 'Female_vs_male';
-  else if Effect = 'Group*gender' then Parameter = 'Interaction_GroupxGender';
+/*  else if Effect = 'Group*gender' then Parameter = 'Interaction_GroupxGender';*/
 
   keep _Imputation_ Parameter Estimate StdErr;
 run;
@@ -2441,7 +2291,7 @@ proc glm data=aas_metricsF;
   model auc_lnCort =
         Group
         gender
-        Group*gender
+/*        Group*gender*/
         / solution;
 
   ods output ParameterEstimates=auc_Cort_PE;
@@ -2457,7 +2307,7 @@ data auc_Cort_PE2;
 
   if Effect = 'Group' then Parameter = 'Group_high_vs_lowmed';
   else if Effect = 'gender' then Parameter = 'Female_vs_male';
-  else if Effect = 'Group*gender' then Parameter = 'Interaction_GroupxGender';
+/*  else if Effect = 'Group*gender' then Parameter = 'Interaction_GroupxGender';*/
 
   keep _Imputation_ Parameter Estimate StdErr;
 run;
@@ -2475,10 +2325,6 @@ run;
 
 
 
-
-
-
-
 proc glm data=aas_metricsF;
   by _Imputation_;
   class Group(ref='0') gender(ref='m');
@@ -2486,7 +2332,7 @@ proc glm data=aas_metricsF;
   model auc_lnAmy =
         Group
         gender
-        Group*gender
+/*        Group*gender*/
         / solution;
 
   ods output ParameterEstimates=auc_Amy_PE;
@@ -2502,7 +2348,7 @@ data auc_Amy_PE2;
 
   if Effect = 'Group' then Parameter = 'Group_high_vs_lowmed';
   else if Effect = 'gender' then Parameter = 'Female_vs_male';
-  else if Effect = 'Group*gender' then Parameter = 'Interaction_GroupxGender';
+/*  else if Effect = 'Group*gender' then Parameter = 'Interaction_GroupxGender';*/
 
   keep _Imputation_ Parameter Estimate StdErr;
 run;
@@ -2531,7 +2377,7 @@ proc glm data=aas_metricsF;
   model auc_lnAACR =
         Group
         gender
-        Group*gender
+/*        Group*gender*/
         / solution;
 
   ods output ParameterEstimates=auc_AACR_PE;
@@ -2547,7 +2393,7 @@ data auc_AACR_PE2;
 
   if Effect = 'Group' then Parameter = 'Group_high_vs_lowmed';
   else if Effect = 'gender' then Parameter = 'Female_vs_male';
-  else if Effect = 'Group*gender' then Parameter = 'Interaction_GroupxGender';
+/*  else if Effect = 'Group*gender' then Parameter = 'Interaction_GroupxGender';*/
 
   keep _Imputation_ Parameter Estimate StdErr;
 run;
@@ -2574,7 +2420,7 @@ proc glm data=aas_metricsF;
   model lnCort_peak =
         Group
         gender
-        Group*gender
+/*        Group*gender*/
         / solution;
 
   ods output ParameterEstimates=peak_Cort_PE;
@@ -2590,7 +2436,7 @@ data peak_Cort_PE2;
 
   if Effect = 'Group' then Parameter = 'Group_high_vs_lowmed';
   else if Effect = 'gender' then Parameter = 'Female_vs_male';
-  else if Effect = 'Group*gender' then Parameter = 'Interaction_GroupxGender';
+/*  else if Effect = 'Group*gender' then Parameter = 'Interaction_GroupxGender';*/
 
   keep _Imputation_ Parameter Estimate StdErr;
 run;
@@ -2659,7 +2505,7 @@ proc glm data=aas_metricsF;
   model lnAACR_peak =
         Group
         gender
-        Group*gender
+/*        Group*gender*/
         / solution;
 
   ods output ParameterEstimates=peak_AACR_PE;
@@ -2675,7 +2521,7 @@ data peak_AACR_PE2;
 
   if Effect = 'Group' then Parameter = 'Group_high_vs_lowmed';
   else if Effect = 'gender' then Parameter = 'Female_vs_male';
-  else if Effect = 'Group*gender' then Parameter = 'Interaction_GroupxGender';
+/*  else if Effect = 'Group*gender' then Parameter = 'Interaction_GroupxGender';*/
 
   keep _Imputation_ Parameter Estimate StdErr;
 run;
@@ -2698,6 +2544,176 @@ run;
 /*===================================================
 					    MNAR 
   ===================================================*/
+/*Impute first*/
+
+
+proc export data=aas_log
+	outfile='.../aas_pre_impute.xlsx'
+	dbms=xlsx 
+    replace;
+run;
+
+proc import datafile='.../aas_pre_impute.xlsx'
+	dbms=xlsx
+	out=work.aas_pre_impute 
+    replace;
+run;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ods excel file="C:\Users\Ahmed\OneDrive\Documents\Masters\Second_Year\Master Thesis Data Science\Prenatal stress study\data\Cortisol&AAS\AAS_MI_Results_FCS_LN.xlsx"
+          options(sheet_name="MI_FCS" embedded_titles='yes');
+
+proc mi data=aas_pre_impute out=aas_imputed_ln seed=54321 nimpute=10;
+  class gender Group;
+
+  fcs regpmm;
+
+  var
+    gender Group
+    lnAmy1 lnAmy2 lnAmy3 lnAmy4 lnAmy5 lnAmy6 lnAmy7 lnAmy8
+    lnCort1 lnCort2 lnCort3 lnCort4 lnCort5 lnCort6 lnCort7 lnCort8;
+run;
+
+
+proc means data=aas_imputed_ln n nmiss min max;
+var lnAmy1 lnAmy2 lnAmy3 lnAmy4 lnAmy5 lnAmy6 lnAmy7 lnAmy8
+    lnCort1 lnCort2 lnCort3 lnCort4 lnCort5 lnCort6 lnCort7 lnCort8;
+run;
+
+/*169 is fully missing*/
+proc print data=aas_imputed_ln;
+where ID = 169; run;
+
+data aas_imputed_ln;
+  set aas_imputed_ln;
+  if ID = 169 then delete;
+run;
+
+/*Check again*/
+proc means data=aas_imputed_ln n nmiss min max;
+var lnAmy1 lnAmy2 lnAmy3 lnAmy4 lnAmy5 lnAmy6 lnAmy7 lnAmy8
+    lnCort1 lnCort2 lnCort3 lnCort4 lnCort5 lnCort6 lnCort7 lnCort8;
+run;
+
+
+/*Recalculate lnAACR 1-8*/
+data aas_imputed_ln;
+  set aas_imputed_ln;
+  array amy[8] lnAmy1 lnAmy2 lnAmy3 lnAmy4 lnAmy5 lnAmy6 lnAmy7 lnAmy8;
+  array cort[8] lnCort1 lnCort2 lnCort3 lnCort4 lnCort5 lnCort6 lnCort7 lnCort8;
+  array aacr[8] lnAACR_1 lnAACR_2 lnAACR_3 lnAACR_4 lnAACR_5 lnAACR_6 lnAACR_7 lnAACR_8;
+
+  do i = 1 to 8;
+    if amy[i] ne . and cort[i] ne . then aacr[i] = amy[i] - cort[i];
+  end;
+
+  drop i;
+run;
+
+/*Check for the last time before reshaping*/
+proc means data=aas_imputed_ln n nmiss min max;
+var lnAmy1 lnAmy2 lnAmy3 lnAmy4 lnAmy5 lnAmy6 lnAmy7 lnAmy8
+    lnCort1 lnCort2 lnCort3 lnCort4 lnCort5 lnCort6 lnCort7 lnCort8
+	lnAACR_1 lnAACR_2 lnAACR_3 lnAACR_4 lnAACR_5 lnAACR_6 lnAACR_7 lnAACR_8;
+run;
+
+/*Reshape to long format*/
+data aas_long;
+  set aas_imputed_ln;
+
+  array amy[8] lnAmy1 lnAmy2 lnAmy3 lnAmy4 lnAmy5 lnAmy6 lnAmy7 lnAmy8;
+  array cort[8] lnCort1 lnCort2 lnCort3 lnCort4 lnCort5 lnCort6 lnCort7 lnCort8;
+  array aacr[8] lnAACR_1 lnAACR_2 lnAACR_3 lnAACR_4 lnAACR_5 lnAACR_6 lnAACR_7 lnAACR_8;
+
+  do Sample = 1 to 8;
+    lnAmy = amy[Sample];
+    lnCort = cort[Sample];
+    lnAACR = aacr[Sample];
+
+	/*Assume: Rest = sample 1 and 2, Stress = 3-4, Recovery = 5-8*/
+
+	if Sample in (1, 2) then Phase = "Rest";
+	else if Sample in (3, 4) then Phase = "Stress";
+	else Phase = "Recovery";
+
+    output;
+  end;
+
+  keep ID gender Group Phase _Imputation_ Sample lnAmy lnCort lnAACR;
+run;
+
+
+proc contents data=aas_long; run;
+
+proc print data=aas_long(obs=20);run;
+
+proc means data=aas_long n nmiss min mean median max; run; 
+
+
+proc print data=aas_long;
+var ID _Imputation_ gender Group;
+where ID in (118, 120, 121);
+run;
+
+/*Since original data did not have gender recorded for IDs 118, 120 and 121; the model imputed these values. However, they are all females*/
+data aas_long;
+  set aas_long;
+
+  if ID in (118, 120, 121) then Gender = "f";
+run;
+
+proc print data=aas_long;
+var ID _Imputation_ gender Group;
+where ID in (118, 120, 121);
+run;
+
+/*Also, in HRV data, groups are coded as follows: 0 for low, 1 for high group. However here: 1 for high, 2 for low! change to 0 = low, 1=high */
+data aas_long;
+  set aas_long;
+  if Group = 2 then Group = 0;
+run;
+
+
+proc export data=aas_long 
+	outfile='.../aas_long_FcsImputed.xlsx'
+	dbms=xlsx 
+    replace;
+run;
+
+
+
+proc import datafile='.../aas_long_FcsImputed.xlsx'
+	dbms=xlsx
+	out=work.aas_long 
+    replace;
+run;
+
+proc contents data=aas_long; run;
+
+
+
 
 
 /*MAR assumption: missing values come from the same mean model as observed ones
@@ -2705,12 +2721,12 @@ run;
 MNAR says: What if the missing lnOutcome values come from a slightly shifted mean compared to the observed ones?*/
 
 
-proc import datafile='C:/Users/Ahmed/OneDrive/Documents/Masters/Second_Year/Master Thesis Data Science/Prenatal stress study/data/Cortisol&AAS/old/aas_long_prepared_with_times_FIXED.xlsx'
+proc import datafile='.../aas_long_prepared_with_times_FIXED.xlsx'
 	dbms=xlsx
 	out=work.aas_long_prepared 
     replace;
 run;
-proc import datafile='C:/Users/Ahmed/OneDrive/Documents/Masters/Second_Year/Master Thesis Data Science/Prenatal stress study/data/Cortisol&AAS/aas_namesremoved.xlsx'
+proc import datafile='.../aas_namesremoved.xlsx'
 	out=work.aas_data
 	dbms=xlsx 
     replace;
@@ -2773,13 +2789,13 @@ run;
 proc print data=aas_long_mi_flagged(obs=20); run;
 
 proc export data=aas_long_mi_flagged
-	outfile='C:/Users/Ahmed/OneDrive/Documents/Masters/Second_Year/Master Thesis Data Science/Prenatal stress study/data/Cortisol&AAS/aas_long_mi_flagged.xlsx'
+	outfile='.../aas_long_mi_flagged.xlsx'
 	dbms=xlsx 
     replace;
 run;
 
 
-proc import datafile='C:/Users/Ahmed/OneDrive/Documents/Masters/Second_Year/Master Thesis Data Science/Prenatal stress study/data/Cortisol&AAS/aas_long_mi_flagged.xlsx'
+proc import datafile='.../aas_long_mi_flagged.xlsx'
 out=aas_long_mi_flagged
 dbms=xlsx
 replace;
@@ -2878,6 +2894,26 @@ for delta_early in (0, ±0.1, ±0.2):
      pool */
 
 
+
+proc means data=aas_long_mi_flagged noprint;
+  where Sample >= 4 and Sample <= 8;
+  var min_from_s4;
+  output out=_tmean mean=mean_t;
+run;
+
+data aas_long_mi_flagged_tc;
+  if _n_=1 then set _tmean;
+  set aas_long_mi_flagged;
+  where Sample >= 4 and Sample <= 8;
+
+  t_c  = min_from_s4 - mean_t;
+  t_c2 = t_c*t_c;
+run;
+
+proc contents data=aas_long_mi_flagged_tc; run;
+proc print data=aas_long_mi_flagged_tc(obs=20);run;
+
+
 /*Delta grids (log-scale)*/
 %let early_grid = 0 -0.1 0.1 -0.2 0.2;          /* S4–S6 */
 %let rec_grid   = 0 -0.1 0.1 -0.2 0.2 -0.3 0.3; /* S7–S8 */
@@ -2886,6 +2922,8 @@ for delta_early in (0, ±0.1, ±0.2):
 proc datasets lib=work nolist;
   delete ALL_MNAR_CORT;
 quit;
+
+
 
 
 
@@ -2902,7 +2940,7 @@ quit;
 
     /* Apply phase-specific delta */
     data aas_cort_mnar;
-      set aas_long_mi_flagged;
+      set aas_long_mi_flagged_tc;
       where Sample >= 4;
 
       lnCort_MNAR = lnCort;
@@ -2920,9 +2958,9 @@ quit;
       by _Imputation_;
       class ID Group(ref='0') gender(ref='m') Sample;
       model lnCort_MNAR =
-            min_from_s4
+            t_c
             Group gender
-            Group*min_from_s4
+            Group*t_c
             / solution ddfm=kr;
       random intercept / subject=ID;
       repeated Sample / subject=ID type=AR(1);
@@ -2938,11 +2976,11 @@ quit;
       Delta_early  = &de.;
       Delta_rec    = &dr.;
 
-      if Effect='min_from_s4' then Parameter='Time_from_S4';
+      if Effect='t_c' then Parameter='Linear_Time_from_CPT';
 	  else if Effect='Intercept' then Parameter='Intercept';
       else if Effect='Group' then Parameter='Group_high_vs_lowmed';
       else if Effect='gender' then Parameter='Female_vs_male';
-      else if Effect='min_from_s4*Group' then Parameter='Interaction_GroupxTime';
+      else if Effect='t_c*Group' then Parameter='Interaction_GroupxLinearTime';
       else delete;
 
       if missing(StdErr) then delete;
@@ -2985,7 +3023,7 @@ quit;
 
 
 
-proc contents data=aas_long_mi_flagged; run;
+
 
 
 
@@ -3069,10 +3107,11 @@ quit;
             t_c2
             Group
             gender
-            gender*t_c
             gender*t_c2
+            Group*t_c2
             Group*gender
             / solution cl ddfm=kr;
+
 
       random intercept / subject=ID;
       repeated Sample / subject=ID type=AR(1);
@@ -3093,7 +3132,7 @@ quit;
       else if Effect='t_c2' then Parameter='t_c2';
       else if Effect='Group' then Parameter='Group_high_vs_lowmed';
       else if Effect='gender' then Parameter='Female_vs_male';
-      else if Effect='t_c*gender' then Parameter='Interaction_Femalext_c';
+      else if Effect='t_c2*Group' then Parameter='Interaction_Groupxt_c2';
       else if Effect='t_c2*gender' then Parameter='Interaction_Femalext_c2';
       else if Effect='Group*gender' then Parameter='Interaction_GroupxGender';
       else delete;
@@ -3191,10 +3230,12 @@ quit;
         t_c 
 		t_c2 
         Group gender
-        Group*t_c 
         Group*t_c2 
+        gender*t_c2 
         Group*gender
             / solution cl ddfm=kr;
+
+ 
 
       random intercept / subject=ID;
       repeated Sample / subject=ID type=AR(1);
@@ -3215,8 +3256,8 @@ quit;
       else if Effect='t_c2' then Parameter='t_c2';
       else if Effect='Group' then Parameter='Group_high_vs_lowmed';
       else if Effect='gender' then Parameter='Female_vs_male';
-      else if Effect='t_c*Group' then Parameter='Interaction_HighPMAxt_c';
-      else if Effect='t_c2*Group' then Parameter='Interaction_HighPMAxt_c2';
+      else if Effect='t_c2*Group' then Parameter='Interaction_Groupxt_c2';
+      else if Effect='t_c2*gender' then Parameter='Interaction_Femalext_c2';
       else if Effect='Group*gender' then Parameter='Interaction_GroupxGender';
       else delete;
 
@@ -3260,7 +3301,7 @@ proc print data=AAS_AACR_MNAR(obs=30); run;
 
 
 
-/* De-duplicate pooled MNAR results (works for any outcome table) */
+/* De-duplicate pooled MNAR results */
 %macro dedup_mnar(ds=, out=);
 proc sort data=&ds out=&out nodupkey;
   by Outcome MNAR_pattern Delta_index Parameter;
@@ -3274,7 +3315,7 @@ run;
 
 
 proc export data=ALL_MNAR_CORT
-outfile='C:/Users/Ahmed/OneDrive/Documents/Masters/Second_Year/Master Thesis Data Science/Prenatal stress study/data/Cortisol&AAS/MNAR_lnCort.xlsx'
+outfile='.../MNAR_lnCort.xlsx'
 dbms=xlsx 
 replace;
 run;
@@ -3282,14 +3323,14 @@ run;
 
 
 proc export data=ALL_MNAR_AMY
-outfile='C:/Users/Ahmed/OneDrive/Documents/Masters/Second_Year/Master Thesis Data Science/Prenatal stress study/data/Cortisol&AAS/MNAR_lnAmy.xlsx'
+outfile='.../MNAR_lnAmy.xlsx'
 dbms=xlsx 
 replace;
 run;
 
 
 proc export data=ALL_MNAR_AACR
-outfile='C:/Users/Ahmed/OneDrive/Documents/Masters/Second_Year/Master Thesis Data Science/Prenatal stress study/data/Cortisol&AAS/MNAR_lnAACR.xlsx'
+outfile='.../MNAR_lnAACR.xlsx'
 dbms=xlsx 
 replace;
 run;
