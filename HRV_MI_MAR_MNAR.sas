@@ -1086,6 +1086,7 @@ run;
 
 /*Reduce r.effects structure*/
 proc mixed data=hrv_long nobound method=reml;
+	by _Imputation_; 
 	class Subject_ID Time
 		  Group (ref='0')
 		  REST_VS_STRESS (ref='0') 
@@ -1106,6 +1107,7 @@ proc mixed data=hrv_long nobound method=reml;
 run;
 
 proc mixed data=hrv_long nobound method=reml;
+	by _Imputation_;
 	class Subject_ID Time
 		  Group (ref='0')
 		  REST_VS_STRESS (ref='0') 
@@ -1536,6 +1538,7 @@ run;
 
 /*Reduce the r.effects structure*/
 proc mixed data=hrv_long nobound method=reml;
+	by _Imputation_;
 	class Subject_ID Time
 		  Group (ref='0')
 		  REST_VS_STRESS (ref='0') 
@@ -1556,6 +1559,7 @@ proc mixed data=hrv_long nobound method=reml;
 run;
 
 proc mixed data=hrv_long nobound method=reml;
+	by _imputation_;
 	class Subject_ID Time
 		  Group (ref='0')
 		  REST_VS_STRESS (ref='0') 
@@ -1986,6 +1990,7 @@ run;
 
 /*Reduce the r.effects structure*/
 proc mixed data=hrv_long nobound method=reml;
+	by _imputation_;
 	class Subject_ID Time
 		  Group (ref='0')
 		  REST_VS_STRESS (ref='0') 
@@ -2006,6 +2011,7 @@ proc mixed data=hrv_long nobound method=reml;
 run;
 
 proc mixed data=hrv_long nobound method=reml;
+	by _imputation_;
 	class Subject_ID Time
 		  Group (ref='0')
 		  REST_VS_STRESS (ref='0') 
@@ -2431,6 +2437,7 @@ run;
 
 /*Reduce the r.effects*/
 proc mixed data=hrv_long nobound method=reml;
+	by _Imputation_;
 	class Subject_ID Time
 		  Group (ref='0')
 		  REST_VS_STRESS (ref='0') 
@@ -2451,6 +2458,7 @@ proc mixed data=hrv_long nobound method=reml;
 run;
 
 proc mixed data=hrv_long nobound method=reml;
+	by _Imputation_;
 	class Subject_ID Time
 		  Group (ref='0')
 		  REST_VS_STRESS (ref='0') 
@@ -2940,6 +2948,7 @@ run;
 /*Reduce r.eff structure*/
 
 proc mixed data=hrv_long nobound method=reml;
+	by _Imputation_;
 	class Subject_ID Time
 		  Group (ref='0')
 		  REST_VS_STRESS (ref='0') 
@@ -2960,6 +2969,7 @@ proc mixed data=hrv_long nobound method=reml;
 run;
 
 proc mixed data=hrv_long nobound method=reml;
+	by _Imputation_;
 	class Subject_ID Time
 		  Group (ref='0')
 		  REST_VS_STRESS (ref='0') 
@@ -3373,6 +3383,7 @@ run;
 
 /*Reduce r.eff structure*/
 proc mixed data=hrv_long nobound method=reml;
+	by _Imputation_;
 	class Subject_ID Time
 		  Group (ref='0')
 		  REST_VS_STRESS (ref='0') 
@@ -3393,6 +3404,7 @@ proc mixed data=hrv_long nobound method=reml;
 run;
 
 proc mixed data=hrv_long nobound method=reml;
+	by _Imputation_;
 	class Subject_ID Time
 		  Group (ref='0')
 		  REST_VS_STRESS (ref='0') 
