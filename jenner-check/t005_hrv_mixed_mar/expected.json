@@ -1,0 +1,18 @@
+{
+  "_captured_at": "2026-07-14T10:49:03.367078Z",
+  "_captured_run_id": "r_79f2d183969340f49f228eaeee622fdd",
+  "status": "ok",
+  "exit_code": 0,
+  "log_contains": [
+    "NOTE: Wrote hrv_long (72 rows, 6 columns).",
+    "NOTE: PROC MIXED data=hrv_long"
+  ],
+  "log_does_not_contain": [
+    "ERROR:",
+    "[JENNER-ERROR"
+  ],
+  "diagnostics": {
+    "parse_warnings": [],
+    "runtime_warnings": []
+  }
+}

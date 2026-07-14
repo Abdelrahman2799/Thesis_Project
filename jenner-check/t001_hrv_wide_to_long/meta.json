@@ -1,0 +1,7 @@
+{
+  "bundle": "t001_hrv_wide_to_long",
+  "source_file": "HRV_DL.sas",
+  "source_blob_sha": "089c9df63e7f04997dbe419e103cba9c340fe75b",
+  "source_commit": "70590658218641dcdd1ed13eb9e1109135038d5d",
+  "notes": "Wide->long array reshape of HRV timepoints (T1-T6) with derived REST_VS_STRESS condition flag; verbatim from HRV_DL.sas, run on a 6-subject mock wide table. Produces 36 long rows; SCL present only at T1-T2."
+}

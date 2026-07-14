@@ -1,0 +1,7 @@
+{
+  "bundle": "t005_hrv_mixed_mar",
+  "source_file": "HRV_MI_MAR_MNAR.sas",
+  "source_blob_sha": "dabcfa754fb71ffb717fe8da915615c8b4399943",
+  "source_commit": "70590658218641dcdd1ed13eb9e1109135038d5d",
+  "notes": "MAR linear mixed model for lnRMSSD: random intercept + AR(1) repeated over Time, Group/condition/Gender fixed effects + two-way interactions, REML; verbatim from HRV_MI_MAR_MNAR.sas, run on a seeded 12-subject x 6-timepoint mock long table (deterministic, reproducible across POSTs). Produces Type III tests, fit stats, solution for fixed effects."
+}

@@ -1,0 +1,50 @@
+      The Mixed Procedure       
+       Model Information        
+
+Item                       Value
+----------------------  --------
+Dependent Variable       lnRMSSD
+Estimation Method           REML
+Covariance Structure       AR(1)
+Number of Observations        72
+
+Covariance Parameter Estimates
+
+Cov Parm  Estimate
+--------  --------
+Group       0.0337
+Residual    0.0633
+
+               Type III Tests of Fixed Effects               
+
+Effect                   Num DF    Den DF   F Value    Pr > F
+---------------------  --------  --------  --------  --------
+Group                         1      10.7      0.69    0.4253
+REST_VS_STRESS                1      57.0      1.82    0.1821
+Gender                        1      12.2      3.01    0.1079
+Group*REST_VS_STRESS          1      57.0      3.29    0.0748
+Group*Gender                  1       8.0      0.04    0.8431
+REST_VS_STRESS*Gender         1      57.0      0.02    0.8879
+
+         Fit Statistics          
+
+Statistic                   Value
+-----------------------  --------
+-2 Res Log Likelihood     33.2892
+AIC (Smaller is Better)   37.2892
+BIC (Smaller is Better)   41.8425
+
+                       Solution for Fixed Effects                       
+
+Effect            Estimate  Standard Error        DF   t Value  Pr > |t|
+----------------  --------  --------------  --------  --------  --------
+Intercept           3.4569          0.1707         .     17.29    <.0001
+Group_1            -0.0466          0.2264         .      0.83    0.4072
+REST_VS_STRESS_1    0.0755          0.1258         .      1.35    0.1768
+Gender_m            0.1759          0.2027         .      1.74    0.0826
+Group_1             -0.006          0.1258         .      1.81    0.0695
+Group_1            -0.1817          0.2576         .      0.20    0.8380
+REST_VS_STRESS_1   -0.0755          0.1334         .      0.14    0.8874
+Group_0            -0.2344                         .         .         .
+REST_VS_STRESS_0   -0.0944                         .         .         .
+Gender_f           -0.1759                         .         .         .

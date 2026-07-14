@@ -1,0 +1,7 @@
+{
+  "bundle": "t003_aacr_metrics_merge",
+  "source_file": "alpha-amylase.sas",
+  "source_blob_sha": "f77ee0f264b0d7e3524f61f061ae1fc24ad11adc",
+  "source_commit": "70590658218641dcdd1ed13eb9e1109135038d5d",
+  "notes": "Covariate merge with hard abort-on-missing guard + proc sql row-count integrity check + AACR (log amylase/cortisol ratio) summary derivations (baseline, peak, delta, AUC, slope); verbatim from alpha-amylase.sas, run on 4-subject mock long+metrics tables."
+}

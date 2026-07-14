@@ -1,0 +1,18 @@
+{
+  "_captured_at": "2026-07-14T10:50:51.417856Z",
+  "_captured_run_id": "r_4cfeb75a27bb4954b930854274d1818b",
+  "status": "ok",
+  "exit_code": 0,
+  "log_contains": [
+    "NOTE: 2 duplicate observations were deleted.",
+    "NOTE: Wrote ALL_MNAR_CORT_DEDUP (6 rows, 5 columns)."
+  ],
+  "log_does_not_contain": [
+    "ERROR:",
+    "[JENNER-ERROR"
+  ],
+  "diagnostics": {
+    "parse_warnings": [],
+    "runtime_warnings": []
+  }
+}
