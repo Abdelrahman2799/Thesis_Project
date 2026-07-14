@@ -1,0 +1,18 @@
+{
+  "_captured_at": "2026-07-14T10:46:32.344618Z",
+  "_captured_run_id": "r_65c395e862184e5b9e339bfee9949ce2",
+  "status": "ok",
+  "exit_code": 0,
+  "log_contains": [
+    "NOTE: Wrote metrics_with_cov (4 rows, 12 columns).",
+    "NOTE: Wrote metrics_with_cov (4 rows, 17 columns)."
+  ],
+  "log_does_not_contain": [
+    "ERROR:",
+    "[JENNER-ERROR"
+  ],
+  "diagnostics": {
+    "parse_warnings": [],
+    "runtime_warnings": []
+  }
+}

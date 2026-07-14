@@ -1,0 +1,10 @@
+                                          De-duplicated MNAR results (lnCort)
+
+  Obs  Outcome  MNAR_pattern                 Parameter  Delta_index  Estimate
+    1  lnCort   high          Female_vs_male                      1     -0.08
+    2  lnCort   high          Group_high_vs_lowmed                1      0.13
+    3  lnCort   highstress    Interaction_GroupxStress            1      0.05
+    4  lnCort   stress        Intercept                           1      0.51
+    5  lnCort   stress        Stress_vs_rest                      1      0.22
+    6  lnCort   stress        Stress_vs_rest                      2      0.24
+

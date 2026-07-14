@@ -1,0 +1,7 @@
+{
+  "bundle": "t004_macro_dedup_mnar",
+  "source_file": "alpha-amylase.sas",
+  "source_blob_sha": "f77ee0f264b0d7e3524f61f061ae1fc24ad11adc",
+  "source_commit": "70590658218641dcdd1ed13eb9e1109135038d5d",
+  "notes": "Caller for the author's %dedup_mnar macro (proc sort nodupkey by Outcome/MNAR_pattern/Delta_index/Parameter); macro definition verbatim from alpha-amylase.sas. Script is self-contained (inline mock MNAR table with seeded duplicate keys). Deletes 2 duplicates (8->6 rows)."
+}

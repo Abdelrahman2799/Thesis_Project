@@ -1,0 +1,7 @@
+{
+  "bundle": "t002_hrv_log_transform",
+  "source_file": "HRV_DL.sas",
+  "source_blob_sha": "089c9df63e7f04997dbe419e103cba9c340fe75b",
+  "source_commit": "70590658218641dcdd1ed13eb9e1109135038d5d",
+  "notes": "Corrected RSA/SCL shifted-log transform log(x+1)/log(x+0.01) applied element-wise across arrays with a missing-value guard; verbatim from HRV_DL.sas, run on a 5-subject mock table with seeded missings. Followed by the author's nmiss QC."
+}

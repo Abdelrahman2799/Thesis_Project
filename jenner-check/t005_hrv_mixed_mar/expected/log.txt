@@ -1,0 +1,56 @@
+NOTE: Jenner v1.5.30 (build v1.5.30+unknown.20260714T043649Z.x86_64-unknown-linux-gnu)
+
+NOTE: Option OBS changed to 100.
+NOTE: DATA hrv_long
+
+
+NOTE: Wrote hrv_long (72 rows, 6 columns).
+NOTE: DATA elapsed:
+  wall  0.00 seconds
+  cpu   0.00 seconds
+NOTE: PROC SORT data=hrv_long
+
+NOTE: Read 72 rows from hrv_long.
+NOTE: Wrote hrv_long (72 rows, 6 columns).
+NOTE: PROC SORT statement used.
+NOTE: PROC MIXED data=hrv_long
+
+NOTE: PROC MIXED: using Python wrapper (mixed_renderer.py).
+NOTE: PROC MIXED results written to: ./ods_output/mixed_results.spec.json
+NOTE: Formula: lnRMSSD ~ C(Group) + C(REST_VS_STRESS) + C(Gender) + C(Group):C(REST_VS_STRESS) + C(Group):C(Gender) + C(REST_VS_STRESS):C(Gender)
+NOTE: Group variable: Subject_ID
+NOTE: Estimation method: REML (reml=True)
+NOTE: Repeated covariance structure: TYPE=AR(1)
+NOTE: Using GEE for covariance structure: AR(1)
+NOTE: MixedLM fitting failed with lbfgs (Singular matrix), trying powell
+NOTE: 
+NOTE: Mixed Linear Model Results:
+NOTE:                      Mixed Linear Model Regression Results
+NOTE: ===============================================================================
+NOTE: Model:                     MixedLM         Dependent Variable:         lnRMSSD 
+NOTE: No. Observations:          72              Method:                     REML    
+NOTE: No. Groups:                12              Scale:                      0.0633  
+NOTE: Min. group size:           6               Log-Likelihood:             -16.6446
+NOTE: Max. group size:           6               Converged:                  Yes     
+NOTE: Mean group size:           6.0                                                 
+NOTE: -------------------------------------------------------------------------------
+NOTE:                                       Coef. Std.Err.   z    P>|z| [0.025 0.975]
+NOTE: -------------------------------------------------------------------------------
+NOTE: Intercept                             2.952    0.171 17.293 0.000  2.618  3.287
+NOTE: C(Group)[T.1]                         0.188    0.226  0.829 0.407 -0.256  0.631
+NOTE: C(REST_VS_STRESS)[T.1]                0.170    0.126  1.351 0.177 -0.077  0.416
+NOTE: C(Gender)[T.m]                        0.352    0.203  1.736 0.083 -0.045  0.749
+NOTE: C(Group)[T.1]:C(REST_VS_STRESS)[T.1]  0.228    0.126  1.815 0.070 -0.018  0.475
+NOTE: C(Group)[T.1]:C(Gender)[T.m]          0.053    0.258  0.204 0.838 -0.452  0.557
+NOTE: C(REST_VS_STRESS)[T.1]:C(Gender)[T.m] 0.019    0.133  0.142 0.887 -0.243  0.280
+NOTE: Group Var                             0.034    0.094                           
+NOTE: ===============================================================================
+NOTE: 
+NOTE: GEE cov param extraction failed: 'MixedLM' object has no attribute 'cov_struct'
+NOTE: Results written to: ./ods_output/mixed_results.json
+NOTE: ODS plot written: mixed_residuals_vs_predicted.spec.json
+NOTE: ODS plot written: mixed_residual_histogram_panel.spec.json
+NOTE: ODS plot written: mixed_residuals_vs_obs_order.spec.json
+NOTE: ODS plot written: mixed_qq_plot.spec.json
+NOTE: ODS plot written: mixed_diagnostics.spec.json
+NOTE: PROC MIXED ODS Graphics generated.
