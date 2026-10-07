@@ -1,7 +1,7 @@
 # Prenatal Exposure to Maternal Distress and Adult Stress Physiology
 
 **MSc thesis · Statistics and Data Science (Data Science specialization) · Hasselt University, 2025–2026**
-Supervisors: dr. Cécile Kremer (Hasselt University) and Prof. Dr. Bea Van den Bergh
+Supervisors: dr. Cécile Kremer (Hasselt University) and Prof. Dr. Bea Van den Bergh (KU Leuven).
 
 📄 **[Read the full thesis (PDF)](My_Master_Thesis.pdf)**
 
